@@ -20,6 +20,8 @@ namespace Five68.Facades
 
 		internal async Task UpdateAsync(User user)
 		{
+			user.UpdatedAt = DateTime.UtcNow;
+
 			context_.Users.Update(user);
 			await context_.SaveChangesAsync();
 		}

@@ -7,7 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Five68.IntegrationTests;
 
-public class TestAuthController : IClassFixture<Five68WebAppFactory>
+[Collection("Integration")]
+public class TestAuthController
 {
 	private readonly HttpClient client_;
 	private readonly Five68WebAppFactory factory_;
@@ -37,6 +38,7 @@ public class TestAuthController : IClassFixture<Five68WebAppFactory>
 			PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4),
 			FullName = "Test User",
 			Role = UserRole.Admin,
+			Status = UserStatus.Active,
 		});
 		db.SaveChanges();
 	}

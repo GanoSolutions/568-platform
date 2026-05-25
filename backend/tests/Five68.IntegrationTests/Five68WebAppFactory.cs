@@ -16,6 +16,7 @@ public class Five68WebAppFactory : WebApplicationFactory<Program>, IAsyncLifetim
 			config.AddInMemoryCollection(new Dictionary<string, string?>
 			{
 				["AppSettings:Crypto:WorkFactor"] = "4",
+				["ConnectionStrings:DefaultConnection"] = "Host=Five68-db;Port=5432;Database=Five68-test;Username=postgres;Password=postgres",
 			});
 		});
 
@@ -27,15 +28,15 @@ public class Five68WebAppFactory : WebApplicationFactory<Program>, IAsyncLifetim
 
 	public async Task InitializeAsync()
 	{
-		using var scope = Services.CreateScope();
-		var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+		using IServiceScope scope = Services.CreateScope();
+		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		await db.Database.EnsureCreatedAsync();
 	}
 
 	public new async Task DisposeAsync()
 	{
-		using var scope = Services.CreateScope();
-		var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+		using IServiceScope scope = Services.CreateScope();
+		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		await db.Database.EnsureDeletedAsync();
 		await base.DisposeAsync();
 	}

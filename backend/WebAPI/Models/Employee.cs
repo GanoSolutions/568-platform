@@ -7,8 +7,8 @@ namespace Five68.Models
 		public string Phone { get; set; } = null!;
 		public DateOnly? ContractEnd { get; set; }
 		public bool Invited { get; set; } = false;
-		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-		public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+		public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+		public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 		public User User { get; set; } = null!;
 	}
 }

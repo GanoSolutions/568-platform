@@ -185,10 +185,10 @@ I test girano in Docker tramite i profili `test`:
 
 ```bash
 # Unit test
-docker compose --profile test run unit-tests
+docker compose run --build --rm unit-tests
 
 # Integration test (richiede il DB healthy)
-docker compose --profile test run integration-tests
+docker compose run --build --rm integration-tests
 ```
 
 I test di integrazione usano `Five68WebAppFactory` per avviare un server in-process con un database PostgreSQL reale.
