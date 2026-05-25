@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Five68.IntegrationTests;
@@ -27,15 +28,15 @@ public class Five68WebAppFactory : WebApplicationFactory<Program>, IAsyncLifetim
 
 	public async Task InitializeAsync()
 	{
-		using var scope = Services.CreateScope();
-		var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+		using IServiceScope scope = Services.CreateScope();
+		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		await db.Database.EnsureCreatedAsync();
 	}
 
 	public new async Task DisposeAsync()
 	{
-		using var scope = Services.CreateScope();
-		var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+		using IServiceScope scope = Services.CreateScope();
+		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		await db.Database.EnsureDeletedAsync();
 		await base.DisposeAsync();
 	}
