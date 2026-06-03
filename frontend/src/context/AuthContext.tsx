@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AppUser } from '@/types';
-import { authApi, userApi, type UserDTO, getAccessToken, setTokens, clearTokens } from '@/lib/apiClient';
+import { authApi, userApi, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
 
 interface AuthContextValue {
 	user: AppUser | null
@@ -16,20 +16,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * Decodes the JWT payload to extract the user ID.
- * .NET JwtSecurityTokenHandler maps ClaimTypes.NameIdentifier → "sub".
- */
-export function getUserIdFromToken(token: string): string | null {
-	try {
-		const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-		const payload = JSON.parse(atob(base64)) as Record<string, unknown>;
-		const id = payload['sub'] ?? payload['nameid'];
-		return typeof id === 'string' ? id : null;
-	} catch {
-		return null;
-	}
-}
+export { getUserIdFromToken };
 
 /**
  * Maps a backend UserDTO to the frontend AppUser shape.
