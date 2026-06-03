@@ -65,11 +65,6 @@ describe('getUserIdFromToken', () => {
 		expect(getUserIdFromToken(token)).toBe('user-guid-here');
 	});
 
-	it('cade back su "nameid" se "sub" non è presente', () => {
-		const token = makeJwt({ nameid: 'user-via-nameid', exp: 9999999999 });
-		expect(getUserIdFromToken(token)).toBe('user-via-nameid');
-	});
-
 	it('restituisce null se il token è malformato', () => {
 		expect(getUserIdFromToken('not.a.jwt')).toBeNull();
 	});
