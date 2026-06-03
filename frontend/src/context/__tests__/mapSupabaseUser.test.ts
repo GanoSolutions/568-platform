@@ -1,77 +1,81 @@
 import { describe, it, expect } from 'vitest';
-import { mapSupabaseUser } from '../AuthContext';
-import type { SupabaseAuthUser, SupabaseProfile } from '../AuthContext';
+import { mapUserDTO, getUserIdFromToken } from '../AuthContext';
+import type { UserDTO } from '@/lib/apiClient';
 
-// ─── A2: mapSupabaseUser ──────────────────────────────────────────────────────
+// ─── A2: mapUserDTO ───────────────────────────────────────────────────────────
 
-const baseAuth: SupabaseAuthUser = {
-	id: 'auth-123',
+const baseDTO: UserDTO = {
+	id: 'a1b2c3d4-0000-0000-0000-000000000001',
 	email: 'mario@example.com',
-	user_metadata: { full_name: 'Mario Rossi', role: 'employee' },
-};
-
-const baseProfile: SupabaseProfile = {
-	id: 'profile-456',
-	auth_user_id: 'auth-123',
-	full_name: 'Mario Rossi',
-	email: 'mario@example.com',
-	role: 'employee',
+	fullName: 'Mario Rossi',
+	role: 2,      // Employee
+	status: 1,    // Active
 	color: '#6366f1',
-	first_login_completed: true,
-	telegram_chat_id: null,
+	createdAt: '2026-01-01T00:00:00Z',
 };
 
-describe('mapSupabaseUser', () => {
-	it('mappa correttamente i campi base dal profilo', () => {
-		const user = mapSupabaseUser(baseAuth, baseProfile);
-		expect(user.id).toBe('profile-456');
-		expect(user.authUserId).toBe('auth-123');
+describe('mapUserDTO', () => {
+	it('mappa correttamente i campi base', () => {
+		const user = mapUserDTO(baseDTO);
+		expect(user.id).toBe(baseDTO.id);
 		expect(user.name).toBe('Mario Rossi');
 		expect(user.email).toBe('mario@example.com');
-		expect(user.role).toBe('employee');
 		expect(user.color).toBe('#6366f1');
 	});
 
-	it('firstLoginCompleted è true quando first_login_completed=true nel profilo', () => {
-		const user = mapSupabaseUser(baseAuth, { ...baseProfile, first_login_completed: true });
-		expect(user.firstLoginCompleted).toBe(true);
+	it('role Employee(2) → "employee"', () => {
+		expect(mapUserDTO({ ...baseDTO, role: 2 }).role).toBe('employee');
 	});
 
-	it('firstLoginCompleted è false quando first_login_completed=false nel profilo', () => {
-		const user = mapSupabaseUser(baseAuth, { ...baseProfile, first_login_completed: false });
-		expect(user.firstLoginCompleted).toBe(false);
+	it('role Admin(0) → "admin"', () => {
+		expect(mapUserDTO({ ...baseDTO, role: 0 }).role).toBe('admin');
 	});
 
-	it('telegramLinked è true quando telegram_chat_id è valorizzato', () => {
-		const user = mapSupabaseUser(baseAuth, { ...baseProfile, telegram_chat_id: '12345678' });
-		expect(user.telegramLinked).toBe(true);
+	it('role Manager(1) → "admin"', () => {
+		expect(mapUserDTO({ ...baseDTO, role: 1 }).role).toBe('admin');
 	});
 
-	it('telegramLinked è false quando telegram_chat_id è null', () => {
-		const user = mapSupabaseUser(baseAuth, { ...baseProfile, telegram_chat_id: null });
-		expect(user.telegramLinked).toBe(false);
+	it('status Active(1) → firstLoginCompleted true', () => {
+		expect(mapUserDTO({ ...baseDTO, status: 1 }).firstLoginCompleted).toBe(true);
 	});
 
-	it('con profilo null usa id e email da authUser come fallback', () => {
-		const user = mapSupabaseUser(baseAuth, null);
-		expect(user.id).toBe('auth-123');
-		expect(user.email).toBe('mario@example.com');
-		expect(user.firstLoginCompleted).toBe(false);
-		expect(user.telegramLinked).toBe(false);
+	it('status Pending(0) → firstLoginCompleted false', () => {
+		expect(mapUserDTO({ ...baseDTO, status: 0 }).firstLoginCompleted).toBe(false);
 	});
 
-	it('con profilo null usa full_name da user_metadata come fallback per il nome', () => {
-		const user = mapSupabaseUser(baseAuth, null);
-		expect(user.name).toBe('Mario Rossi');
+	it('status Disabled(2) → firstLoginCompleted true', () => {
+		expect(mapUserDTO({ ...baseDTO, status: 2 }).firstLoginCompleted).toBe(true);
 	});
 
-	it('con profilo null e nessun metadata usa la parte prima della @ dell\'email', () => {
-		const user = mapSupabaseUser({ id: 'auth-123', email: 'pinco@test.it' }, null);
-		expect(user.name).toBe('pinco');
+	it('color null → colore di default #6366f1', () => {
+		expect(mapUserDTO({ ...baseDTO, color: null }).color).toBe('#6366f1');
+	});
+});
+
+// ─── A3: getUserIdFromToken ───────────────────────────────────────────────────
+
+describe('getUserIdFromToken', () => {
+	function makeJwt(payload: Record<string, unknown>): string {
+		const encoded = btoa(JSON.stringify(payload)).replace(/=/g, '');
+		return `header.${encoded}.signature`;
+	}
+
+	it('estrae il "sub" claim dal JWT', () => {
+		const token = makeJwt({ sub: 'user-guid-here', exp: 9999999999 });
+		expect(getUserIdFromToken(token)).toBe('user-guid-here');
 	});
 
-	it('con profilo null e nessuna email usa "Utente" come nome di default', () => {
-		const user = mapSupabaseUser({ id: 'auth-123' }, null);
-		expect(user.name).toBe('Utente');
+	it('cade back su "nameid" se "sub" non è presente', () => {
+		const token = makeJwt({ nameid: 'user-via-nameid', exp: 9999999999 });
+		expect(getUserIdFromToken(token)).toBe('user-via-nameid');
+	});
+
+	it('restituisce null se il token è malformato', () => {
+		expect(getUserIdFromToken('not.a.jwt')).toBeNull();
+	});
+
+	it('restituisce null se sub non è una stringa', () => {
+		const token = makeJwt({ sub: 42 });
+		expect(getUserIdFromToken(token)).toBeNull();
 	});
 });
