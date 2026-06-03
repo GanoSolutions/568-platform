@@ -38,16 +38,14 @@ function AppRoutes() {
 						? <Navigate to="/calendar" replace />
 						: <Navigate to="/set-password" replace />
 				} />
-			<Route
-			path="/set-password"
-			element={
-				!user
-					? <Navigate to="/login" replace />
-					: user.firstLoginCompleted
+				<Route
+				path="/set-password"
+				element={
+					user?.firstLoginCompleted
 						? <Navigate to="/calendar" replace />
 						: <SetPassword />
-			}
-		/>
+				}
+			/>
 			<Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
 				<Route index element={<Navigate to="/calendar" replace />} />
 				<Route path="calendar" element={<Calendar />} />

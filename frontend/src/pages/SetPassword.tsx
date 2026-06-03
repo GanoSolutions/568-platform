@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { userApi } from '@/lib/apiClient';
 
 export default function SetPassword() {
 	const navigate = useNavigate();
-	const { user, completeFirstLogin, logout } = useAuth();
+	const [searchParams] = useSearchParams();
+	const { user, logout } = useAuth();
 	const [password, setPassword] = useState('');
 	const [confirm, setConfirm] = useState('');
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState('');
+
+	const inviteToken = searchParams.get('token');
 
 	const validate = (): string | null => {
 		if (password.length < 8) return 'La password deve essere di almeno 8 caratteri';
@@ -22,36 +25,14 @@ export default function SetPassword() {
 		const validationError = validate();
 		if (validationError) { setError(validationError); return; }
 
-		if (!supabase) { setError('Supabase non configurato'); return; }
+		if (!inviteToken) { setError('Link di invito non valido o scaduto. Chiedi un nuovo invito.'); return; }
 
 		setSubmitting(true);
 		setError('');
 
 		try {
-			// Ottieni la sessione prima di tutto
-			const { data: sessionData } = await supabase.auth.getSession();
-			const authUserId = sessionData?.session?.user?.id;
-
-			if (!authUserId) throw new Error('Sessione non trovata. Riprova ad accedere.');
-
-			// Segna first_login_completed = true nel DB PRIMA di updateUser
-			const { error: dbError } = await supabase
-				.from('profiles')
-				.update({ first_login_completed: true })
-				.eq('auth_user_id', authUserId);
-
-			if (dbError) throw new Error(`Errore salvataggio profilo: ${dbError.message}`);
-
-			// Aggiornamento ottimistico sincrono: aggiorna lo stato React immediatamente.
-			// Evita la race condition in cui updateUser() ruota il token e refreshProfile()
-			// trova getSession()=null, lasciando firstLoginCompleted=false nello stato.
-			completeFirstLogin();
-
-			// Aggiorna la password (triggera onAuthStateChange — il DB è già aggiornato)
-			const { error: updateError } = await supabase.auth.updateUser({ password });
-			if (updateError) throw updateError;
-
-			navigate('/calendar', { replace: true });
+			await userApi.acceptInvite(inviteToken, password);
+			navigate('/login', { replace: true });
 		} catch (err) {
 			setError((err as Error).message ?? 'Errore durante il salvataggio della password');
 		} finally {
@@ -73,6 +54,11 @@ export default function SetPassword() {
 					<p className="text-slate-400 text-sm mt-1">
 						{user?.name ? `Benvenuto/a, ${user.name}!` : 'Benvenuto/a!'} Scegli una password per accedere all&apos;app.
 					</p>
+					{!inviteToken && (
+						<p className="text-red-400 text-xs mt-2 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">
+							Link di invito mancante. Assicurati di aver aperto il link dall&apos;email di invito.
+						</p>
+					)}
 				</div>
 
 				{/* Form */}
@@ -122,19 +108,21 @@ export default function SetPassword() {
 					</button>
 				</form>
 
-				{/* Escape hatch: se l'utente sbagliato e loggato puo uscire */}
-				<div className="mt-6 text-center">
-					<p className="text-slate-600 text-xs mb-2">
-						Accesso come <span className="text-slate-400">{user?.email}</span>
-					</p>
-					<button
-						type="button"
-						onClick={async () => { await logout(); navigate('/login', { replace: true }); }}
-						className="text-slate-500 hover:text-slate-300 text-xs underline underline-offset-2 transition"
-					>
-						Non sei tu? Esci
-					</button>
-				</div>
+				{/* Escape hatch: visibile solo se un utente è già loggato (caso anomalo) */}
+				{user && (
+					<div className="mt-6 text-center">
+						<p className="text-slate-600 text-xs mb-2">
+							Accesso come <span className="text-slate-400">{user.email}</span>
+						</p>
+						<button
+							type="button"
+							onClick={async () => { await logout(); navigate('/login', { replace: true }); }}
+							className="text-slate-500 hover:text-slate-300 text-xs underline underline-offset-2 transition"
+						>
+							Non sei tu? Esci
+						</button>
+					</div>
+				)}
 			</div>
 		</div>
 	);
