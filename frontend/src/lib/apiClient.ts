@@ -9,8 +9,8 @@
 import { jwtDecode } from 'jwt-decode';
 
 export interface JwtPayload {
-	/** Standard subject claim — set to user GUID by .NET JwtService */
-	sub?: string;
+	/** Standard nameid claim — set to user GUID by .NET JwtService */
+	nameid?: string;
 	/** .NET maps ClaimTypes.Email here */
 	email?: string;
 }
@@ -55,13 +55,13 @@ const ACCESS_TOKEN_KEY = 'api_access_token';
 const REFRESH_TOKEN_KEY = 'api_refresh_token';
 
 /**
- * Decodes the JWT payload and returns the user ID from the `sub` claim.
+ * Decodes the JWT payload and returns the user ID.
  * Returns null if the token is missing, malformed, or has no `sub`.
  */
 export function getUserIdFromToken(token: string): string | null {
 	try {
 		const payload = jwtDecode<JwtPayload>(token);
-		return typeof payload.sub === 'string' ? payload.sub : null;
+		return typeof payload.nameid === 'string' ? payload.nameid : null;
 	} catch {
 		return null;
 	}

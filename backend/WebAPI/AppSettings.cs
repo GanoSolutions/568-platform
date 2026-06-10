@@ -19,7 +19,7 @@ namespace Five68
 	public class JWTSettings
 	{
 		public string Secret { get; init; } = string.Empty;
-		public int ExpiryMinutes { get; init; }
+		public double ExpiryMinutes { get; init; }
 		public string ValidIssuer { get; init; } = string.Empty;
 		public string ValidAudience { get; init; } = string.Empty;
 		public bool ValidateIssuer { get; init; }
