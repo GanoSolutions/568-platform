@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Components;
 using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 using Five68.Services;
 using Five68.Models.DTO;
@@ -23,6 +22,13 @@ namespace Five68.Controllers
 			logger_ = logger;
 		}
 
+		/// <summary>
+		/// Returns a single user by ID.
+		/// </summary>
+		/// <param name="id">The ID of the user to retrieve.</param>
+		/// <response code="200">User found.</response>
+		/// <response code="401">Caller is not authenticated.</response>
+		/// <response code="404">User not found.</response>
 		[HttpGet("{id:guid}")]
 		public async Task<IActionResult> GetUserById(Guid id)
 		{
@@ -37,6 +43,11 @@ namespace Five68.Controllers
 			return Ok(user);
 		}
 
+		/// <summary>
+		/// Returns all users.
+		/// </summary>
+		/// <response code="200">List of users.</response>
+		/// <response code="401">Caller is not authenticated.</response>
 		[HttpGet("")]
 		public async Task<IActionResult> GetUsers()
 		{
@@ -101,6 +112,24 @@ namespace Five68.Controllers
 		{
 			await userService_.AcceptInvite(model);
 			return Ok();
+		}
+
+		/// <summary>
+		/// Changes the authenticated user's password. Requires the current password as verification.
+		/// The new password is validated against password requirements and hashed before saving.
+		/// </summary>
+		/// <response code="204">Password changed successfully.</response>
+		/// <response code="400">New password does not meet requirements.</response>
+		/// <response code="401">Caller is not authenticated or current password is incorrect.</response>
+		[Authorize]
+		[HttpPost("password")]
+		public async Task<IActionResult> ChangePassword([FromBody] ChangePassword model)
+		{
+			string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+			if (!Guid.TryParse(requesterId, out Guid id))
+				return Unauthorized();
+			await userService_.ChangePassword(id, model);
+			return NoContent();
 		}
 	}
 }

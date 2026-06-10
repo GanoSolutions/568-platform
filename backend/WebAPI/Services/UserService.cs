@@ -127,5 +127,22 @@ namespace Five68.Services
 				Status = UserStatus.Disabled,
 			});
 		}
+
+		public async Task ChangePassword(Guid userId, ChangePassword model)
+		{
+			User user = await userFacade_.FindByIdAsync(userId);
+			if (user is null)
+			{
+				throw new UnauthorizedException();
+			}
+
+			if (!userUtils_.CheckPassword(user, model.CurrentPassword))
+			{
+				throw new UnauthorizedException("Current password is incorrect");
+			}
+
+			user.PasswordHash = userUtils_.HashAndCheckPassword(model.NewPassword);
+			await userFacade_.UpdateAsync(user);
+		}
 	}
 }
