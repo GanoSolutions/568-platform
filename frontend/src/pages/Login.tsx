@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import type { AppUser } from '@/types';
@@ -7,6 +8,7 @@ export default function Login() {
 	const { login, loginWithPassword, isMockMode } = useAuth();
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
 	const [error, setError] = useState('');
 	const [submitting, setSubmitting] = useState(false);
 
@@ -27,8 +29,9 @@ export default function Login() {
 			} else {
 				await loginWithPassword(email, password);
 			}
-		} catch (err) {
-			setError((err as Error).message || 'Accesso non riuscito');
+		} catch {
+			// Messaggio generico: non riveliamo se l'errore è su email o password.
+			setError('Email o password non corretti');
 		} finally {
 			setSubmitting(false);
 		}
@@ -63,15 +66,25 @@ export default function Login() {
 				</div>
 				<div>
 					<label className="text-slate-300 text-sm font-medium block mb-1.5">Password</label>
-					<input
-						type="password"
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-						className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
-						placeholder="••••••••"
-						required
-						autoComplete="current-password"
-					/>
+					<div className="relative">
+						<input
+							type={showPassword ? 'text' : 'password'}
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-3 pr-12 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+							placeholder="••••••••"
+							required
+							autoComplete="current-password"
+						/>
+						<button
+							type="button"
+							onClick={() => setShowPassword((v) => !v)}
+							aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+							className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-200 transition"
+						>
+							{showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+						</button>
+					</div>
 				</div>
 
 				{error && (
