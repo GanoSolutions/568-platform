@@ -13,6 +13,8 @@ export interface JwtPayload {
 	nameid?: string;
 	/** .NET maps ClaimTypes.Email here */
 	email?: string;
+	/** Expiration time as a Unix timestamp in seconds */
+	exp?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +58,7 @@ const REFRESH_TOKEN_KEY = 'api_refresh_token';
 
 /**
  * Decodes the JWT payload and returns the user ID.
- * Returns null if the token is missing, malformed, or has no `sub`.
+ * Returns null if the token is missing, malformed, or has no `nameid`.
  */
 export function getUserIdFromToken(token: string): string | null {
 	try {
@@ -64,6 +66,31 @@ export function getUserIdFromToken(token: string): string | null {
 		return typeof payload.nameid === 'string' ? payload.nameid : null;
 	} catch {
 		return null;
+	}
+}
+
+/**
+ * How many seconds before the actual expiry a token is already considered
+ * "expiring" — gives a small margin to refresh proactively and avoid sending
+ * a request with a token that expires mid-flight.
+ */
+const TOKEN_EXPIRY_WINDOW_SECONDS = 5;
+
+/**
+ * Returns true if the access token is expired or will expire within the next
+ * {@link TOKEN_EXPIRY_WINDOW_SECONDS} seconds.
+ *
+ * Returns false for tokens without an `exp` claim or that can't be decoded:
+ * in those cases we let the request proceed and rely on the 401 fallback.
+ */
+export function isTokenExpiringSoon(token: string): boolean {
+	try {
+		const { exp } = jwtDecode<JwtPayload>(token);
+		if (typeof exp !== 'number') return false;
+		const nowSeconds = Date.now() / 1000;
+		return exp - nowSeconds <= TOKEN_EXPIRY_WINDOW_SECONDS;
+	} catch {
+		return false;
 	}
 }
 
@@ -154,7 +181,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 		...(init.headers as Record<string, string> | undefined),
 	};
 
-	const token = getAccessToken();
+	let token = getAccessToken();
+
+	// Proactive refresh: if the access token is already expired (or about to be),
+	// refresh once *before* sending the request so we don't waste a round-trip on
+	// a guaranteed 401. The reactive 401 handler below still covers edge cases
+	// (server-side revocation, clock skew) where the token looks valid but isn't.
+	if (token && getRefreshToken() && isTokenExpiringSoon(token)) {
+		try {
+			token = (await refreshOnce()).accessToken;
+		} catch {
+			// Proactive refresh failed — let the request go out and the 401 path
+			// handle the logout, so behaviour matches the reactive case.
+		}
+	}
+
 	if (token) {
 		headers['Authorization'] = `Bearer ${token}`;
 	}
