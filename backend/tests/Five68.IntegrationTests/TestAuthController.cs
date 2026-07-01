@@ -36,7 +36,6 @@ public class TestAuthController
 			Id = Guid.NewGuid(),
 			Email = email,
 			PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4),
-			FullName = "Test User",
 			Role = UserRole.Admin,
 			Status = UserStatus.Active,
 		});

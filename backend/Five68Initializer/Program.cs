@@ -19,28 +19,28 @@ namespace Five68.Initializer
 			Console.WriteLine("USE THIS PROJECT IN TESTING ENVIRONMENT ONLY");
 
 			// 1. Setup Configuration
-			var configuration = new ConfigurationBuilder()
+			IConfigurationRoot configuration = new ConfigurationBuilder()
 				.SetBasePath(AppContext.BaseDirectory)
 				.AddJsonFile("appsettings.Development.json", optional: false)
 				.Build();
 
 			// 2. Setup DI & DbContext
-			var services = new ServiceCollection();
+			ServiceCollection services = new ServiceCollection();
 
 			services.AddDbContext<Five68DbContext>(options =>
 			{
 				options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
 			});
 
-			var serviceProvider = services.BuildServiceProvider();
+			ServiceProvider serviceProvider = services.BuildServiceProvider();
 
-			var adminPassword = configuration["AppSettings:Seed:AdminPassword"] ?? throw new InvalidOperationException("Seed:AdminPassword not configured in the application settings");
+			string adminPassword = configuration["AppSettings:Seed:AdminPassword"] ?? throw new InvalidOperationException("Seed:AdminPassword not configured in the application settings");
 			string workFactor = configuration["AppSettings:Crypto:WorkFactor"] ?? throw new InvalidOperationException("Crypto:WorkFactor not configured in the application settings");
 
 			// 3. Run Seeding
-			using (var scope = serviceProvider.CreateScope())
+			using (IServiceScope scope = serviceProvider.CreateScope())
 			{
-				var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+				Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 				db.Database.EnsureDeleted();
 				db.Database.EnsureCreated();
 				Console.WriteLine("Database created. Seeding data...");
@@ -59,21 +59,21 @@ namespace Five68.Initializer
 				return;
 			}
 
-			var (adminId, managerId, luigiId, annaId, marcoId, giuliaId) = (
+			(Guid adminId, Guid managerId, Guid luigiId, Guid annaId, Guid marcoId, Guid giuliaId) = (
 				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
 			);
 
 			// Settimana corrente (oggi = mercoledì 2026-07-01)
-			var today = DateTime.UtcNow.Date;
-			var mon = today.AddDays(-2); // lun 29/06 — chiusura
-			var tue = today.AddDays(-1); // mar 30/06 — 2 dipendenti (1 parziale)
-			var wed = today;             // mer 01/07 — oggi, 3 dipendenti
-			var thu = today.AddDays(1);  // gio 02/07 — cambio turno pendente
-			var fri = today.AddDays(2);  // ven 03/07 — 3 dipendenti (1 parziale)
+			DateTime today = DateTime.UtcNow.Date;
+			DateTime mon = today.AddDays(-2); // lun 29/06 — chiusura
+			DateTime tue = today.AddDays(-1); // mar 30/06 — 2 dipendenti (1 parziale)
+			DateTime wed = today;             // mer 01/07 — oggi, 3 dipendenti
+			DateTime thu = today.AddDays(1);  // gio 02/07 — cambio turno pendente
+			DateTime fri = today.AddDays(2);  // ven 03/07 — 3 dipendenti (1 parziale)
 			// sab 04/07 — nessun turno creato (giorno vuoto)
-			var sun = today.AddDays(4);  // dom 05/07 — chiusura
+			DateTime sun = today.AddDays(4);  // dom 05/07 — chiusura
 
-			var (shiftMonId, shiftTueId, shiftWedId, shiftThuId, shiftFriId, shiftSunId) = (
+			(Guid shiftMonId, Guid shiftTueId, Guid shiftWedId, Guid shiftThuId, Guid shiftFriId, Guid shiftSunId) = (
 				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
 			);
 
@@ -82,61 +82,49 @@ namespace Five68.Initializer
 			db.Users.AddRange([
 				new User {
 					Id = adminId,
-					FullName = "Admin Admin",
 					Email = "admin@five68.com",
 					Role = UserRole.Admin,
 					Status = UserStatus.Active,
 					PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
-					Color = "#3633f1",
-					Employee = new Employee { UserId = adminId, FiscalCode = "ADM001" }
+					Employee = new Employee { UserId = adminId, Name = "Admin", Surname = "Admin", FiscalCode = "ADM001", Phone = "3200000000", Color = "#3633f1" }
 				},
 				new User {
 					Id = managerId,
-					FullName = "Luca Ferretti",
 					Email = "manager@five68.com",
 					Role = UserRole.Manager,
 					Status = UserStatus.Active,
 					PasswordHash = BCrypt.Net.BCrypt.HashPassword("Manager@1234!"),
-					Color = "#f43f5e",
-					Employee = new Employee { UserId = managerId, FiscalCode = "FRTLCU88M10F205X", Phone = "3331234567" }
+					Employee = new Employee { UserId = managerId, Name = "Luca", Surname = "Ferretti", FiscalCode = "FRTLCU88M10F205X", Phone = "3331234567", Color = "#f43f5e" }
 				},
 				new User {
 					Id = luigiId,
-					FullName = "Luigi Rossi",
 					Email = "luigi.rossi@email.com",
 					Role = UserRole.Employee,
 					Status = UserStatus.Active,
 					PasswordHash = BCrypt.Net.BCrypt.HashPassword("Employee@1234!"),
-					Color = "#10b981",
-					Employee = new Employee { UserId = luigiId, FiscalCode = "RSSLGU90B02H501Z", Phone = "3342345678", ContractEnd = new DateOnly(2026, 12, 31) }
+					Employee = new Employee { UserId = luigiId, Name = "Luigi", Surname = "Rossi", FiscalCode = "RSSLGU90B02H501Z", Phone = "3342345678", ContractEnd = new DateOnly(2026, 12, 31), Color = "#10b981" }
 				},
 				new User {
 					Id = annaId,
-					FullName = "Anna Neri",
 					Email = "anna.neri@email.com",
 					Role = UserRole.Employee,
 					Status = UserStatus.Active,
 					PasswordHash = BCrypt.Net.BCrypt.HashPassword("Employee@1234!"),
-					Color = "#f59e0b",
-					Employee = new Employee { UserId = annaId, FiscalCode = "NRANNA95M52H501Y", Phone = "3364567890", ContractEnd = new DateOnly(2027, 5, 16) }
+					Employee = new Employee { UserId = annaId, Name = "Anna", Surname = "Neri", FiscalCode = "NRANNA95M52H501Y", Phone = "3364567890", ContractEnd = new DateOnly(2027, 5, 16), Color = "#f59e0b" }
 				},
 				new User {
 					Id = marcoId,
-					FullName = "Marco Bianchi",
 					Email = "marco.bianchi@email.com",
 					Role = UserRole.Employee,
 					Status = UserStatus.Pending, // creato, invito non ancora inviato
-					Color = "#8b5cf6",
-					Employee = new Employee { UserId = marcoId, FiscalCode = "BNCMRC95P15G224K", Phone = "3389876543" }
+					Employee = new Employee { UserId = marcoId, Name = "Marco", Surname = "Bianchi", FiscalCode = "BNCMRC95P15G224K", Phone = "3389876543", Color = "#8b5cf6" }
 				},
 				new User {
 					Id = giuliaId,
-					FullName = "Giulia Conti",
 					Email = "giulia.conti@email.com",
 					Role = UserRole.Employee,
 					Status = UserStatus.Disabled, // disabilitata
-					Color = "#06b6d4",
-					Employee = new Employee { UserId = giuliaId, FiscalCode = "CNTGLI92A41H501B", Phone = "3471122334", ContractEnd = new DateOnly(2025, 12, 31) }
+					Employee = new Employee { UserId = giuliaId, Name = "Giulia", Surname = "Conti", FiscalCode = "CNTGLI92A41H501B", Phone = "3471122334", ContractEnd = new DateOnly(2025, 12, 31), Color = "#06b6d4" }
 				},
 			]);
 
