@@ -60,8 +60,8 @@ describe('getUserIdFromToken', () => {
 		return `header.${encoded}.signature`;
 	}
 
-	it('estrae il "sub" claim dal JWT', () => {
-		const token = makeJwt({ sub: 'user-guid-here', exp: 9999999999 });
+	it('estrae il "nameid" claim dal JWT', () => {
+		const token = makeJwt({ nameid: 'user-guid-here', exp: 9999999999 });
 		expect(getUserIdFromToken(token)).toBe('user-guid-here');
 	});
 
@@ -69,8 +69,8 @@ describe('getUserIdFromToken', () => {
 		expect(getUserIdFromToken('not.a.jwt')).toBeNull();
 	});
 
-	it('restituisce null se sub non è una stringa', () => {
-		const token = makeJwt({ sub: 42 });
+	it('restituisce null se nameid non è una stringa', () => {
+		const token = makeJwt({ nameid: 42 });
 		expect(getUserIdFromToken(token)).toBeNull();
 	});
 });
