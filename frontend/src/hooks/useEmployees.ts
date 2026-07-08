@@ -1,15 +1,33 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { COLOR_PALETTE, getNextColor } from '@/lib/colorUtils';
+import { userApi, UserStatus, type UserDTO } from '@/lib/apiClient';
+import { getNextColor } from '@/lib/colorUtils';
 import type { EmployeeDetail } from '@/types';
 
-const INITIAL_EMPLOYEES: EmployeeDetail[] = [
-	{ id: '1', name: 'Mario Rossi', fiscalCode: 'RSSMRA80A01H501Z', email: 'mario.rossi@email.com', phone: '3331234567', contractEnd: '', color: '#6366f1', invited: true, firstLoginCompleted: true },
-	{ id: '2', name: 'Giulia Bianchi', fiscalCode: 'BNCGLI85M41L219Y', email: 'giulia.bianchi@email.com', phone: '3342345678', contractEnd: '2026-12-31', color: '#f43f5e', invited: true, firstLoginCompleted: true },
-	{ id: '3', name: 'Luca Verdi', fiscalCode: 'VRDLCU90B01F205X', email: 'luca.verdi@email.com', phone: '3353456789', contractEnd: '', color: '#f59e0b', invited: false, firstLoginCompleted: false },
-	{ id: '4', name: 'Anna Neri', fiscalCode: 'NRANNA92C41H501W', email: 'anna.neri@email.com', phone: '3364567890', contractEnd: '', color: '#10b981', invited: true, firstLoginCompleted: false },
-	{ id: '5', name: 'Carlo Blu', fiscalCode: 'BLUCRL88D01L219V', email: 'carlo.blu@email.com', phone: '3375678901', contractEnd: '', color: '#3b82f6', invited: true, firstLoginCompleted: true },
-];
+/**
+ * Mappa un UserDTO del backend C# nel modello EmployeeDetail del frontend.
+ *
+ * I dati anagrafici (nome, cognome, codice fiscale, telefono, colore, fine
+ * contratto) sono annidati in `dto.employee`, che è presente solo dopo che
+ * l'utente ha accettato l'invito; prima di allora abbiamo solo email e stato.
+ */
+function mapUserDTOToEmployee(dto: UserDTO): EmployeeDetail {
+	const emp = dto.employee;
+
+	return {
+		id: dto.id,
+		name: emp ? `${emp.name} ${emp.surname}`.trim() : dto.email,
+		email: dto.email,
+		role: dto.role === 0 ? 'admin' : dto.role === 1 ? 'manager' : 'employee',
+		color: emp?.color ?? '#6366f1',
+		fiscalCode: emp?.fiscalCode ?? '',
+		phone: emp?.phone ?? '',
+		contractEnd: emp?.contractEnd ?? '',
+		// invito esistente = qualsiasi stato oltre Pending; primo accesso completato = Active o Disabled
+		invited: dto.status !== UserStatus.Pending,
+		firstLoginCompleted: dto.status >= UserStatus.Active,
+	};
+}
 
 interface EmployeeFormData {
 	name: string;
@@ -20,74 +38,34 @@ interface EmployeeFormData {
 }
 
 export function useEmployees() {
-	const [employees, setEmployees] = useState<EmployeeDetail[]>(isSupabaseConfigured ? [] : INITIAL_EMPLOYEES);
-	const [loading, setLoading] = useState(isSupabaseConfigured);
+	const [employees, setEmployees] = useState<EmployeeDetail[]>([]);
+	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
 
 	// 1. Pure async fetch function (NO synchronous setState at the start)
 	const fetchEmployees = useCallback(async () => {
-		if (!isSupabaseConfigured || !supabase) return;
-
-		const { data, error: loadError } = await supabase
-			.from('profiles')
-			.select('id, full_name, email, role, color, first_login_completed, employees!inner(fiscal_code, phone, contract_end, invited)')
-			.order('created_at', { ascending: true });
-
-		if (loadError) {
-			setError(loadError.message);
+		try {
+			const dtos = await userApi.getAll();
+			const mapped = [...dtos]
+				.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+				.map(mapUserDTOToEmployee);
+			setEmployees(mapped);
+		} catch (loadError) {
+			setError(loadError instanceof Error ? loadError.message : 'Errore nel caricamento dei dipendenti');
+		} finally {
 			setLoading(false);
-			return;
 		}
-
-		const mapped: EmployeeDetail[] = (data ?? []).map((row) => {
-			const employeeRow = Array.isArray(row.employees) ? row.employees[0] : row.employees;
-
-			return {
-				id: row.id,
-				name: row.full_name,
-				email: row.email,
-				role: row.role,
-				color: row.color ?? '#6366f1',
-				fiscalCode: (employeeRow as { fiscal_code?: string })?.fiscal_code ?? '',
-				phone: (employeeRow as { phone?: string })?.phone ?? '',
-				contractEnd: (employeeRow as { contract_end?: string })?.contract_end ?? '',
-				invited: (employeeRow as { invited?: boolean })?.invited ?? false,
-				firstLoginCompleted: (row as { first_login_completed?: boolean }).first_login_completed ?? false,
-			};
-		});
-
-		setEmployees(mapped);
-		setLoading(false);
 	}, []);
 
 	// 2. Effect only handles initial mount. It jumps straight to the `await`.
 	useEffect(() => {
-		if (!isSupabaseConfigured || !supabase) return;
-
-		let cancelled = false;
-
-		const load = async () => {
-			await fetchEmployees();
-			if (cancelled) {
-				// Handle cleanup if component unmounted during fetch
-			}
-		};
-
-		load();
-
-		return () => {
-			cancelled = true;
-		};
+		fetchEmployees();
 	}, [fetchEmployees]);
 
 	// 3. Reload function for AFTER mutations. Safe to have synchronous setState here.
 	const reloadEmployees = useCallback(async () => {
-		if (!isSupabaseConfigured || !supabase) return;
-
 		setLoading(true);
 		setError('');
-		setEmployees([]);
-
 		await fetchEmployees();
 	}, [fetchEmployees]);
 

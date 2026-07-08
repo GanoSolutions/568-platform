@@ -7,10 +7,16 @@ import type { UserDTO } from '@/lib/apiClient';
 const baseDTO: UserDTO = {
 	id: 'a1b2c3d4-0000-0000-0000-000000000001',
 	email: 'mario@example.com',
-	fullName: 'Mario Rossi',
 	role: 2,      // Employee
-	status: 1,    // Active
-	color: '#6366f1',
+	status: 2,    // Active
+	employee: {
+		name: 'Mario',
+		surname: 'Rossi',
+		fiscalCode: 'RSSMRA80A01H501Z',
+		phone: '3331234567',
+		color: '#6366f1',
+		contractEnd: null,
+	},
 	createdAt: '2026-01-01T00:00:00Z',
 };
 
@@ -35,20 +41,31 @@ describe('mapUserDTO', () => {
 		expect(mapUserDTO({ ...baseDTO, role: 1 }).role).toBe('admin');
 	});
 
-	it('status Active(1) → firstLoginCompleted true', () => {
-		expect(mapUserDTO({ ...baseDTO, status: 1 }).firstLoginCompleted).toBe(true);
+	it('status Active(2) → firstLoginCompleted true', () => {
+		expect(mapUserDTO({ ...baseDTO, status: 2 }).firstLoginCompleted).toBe(true);
+	});
+
+	it('status Invited(1) → firstLoginCompleted false', () => {
+		expect(mapUserDTO({ ...baseDTO, status: 1 }).firstLoginCompleted).toBe(false);
 	});
 
 	it('status Pending(0) → firstLoginCompleted false', () => {
 		expect(mapUserDTO({ ...baseDTO, status: 0 }).firstLoginCompleted).toBe(false);
 	});
 
-	it('status Disabled(2) → firstLoginCompleted true', () => {
-		expect(mapUserDTO({ ...baseDTO, status: 2 }).firstLoginCompleted).toBe(true);
+	it('status Disabled(3) → firstLoginCompleted true', () => {
+		expect(mapUserDTO({ ...baseDTO, status: 3 }).firstLoginCompleted).toBe(true);
 	});
 
-	it('color null → colore di default #6366f1', () => {
-		expect(mapUserDTO({ ...baseDTO, color: null }).color).toBe('#6366f1');
+	it('senza employee → name = email e colore di default', () => {
+		const user = mapUserDTO({ ...baseDTO, employee: null });
+		expect(user.name).toBe('mario@example.com');
+		expect(user.color).toBe('#6366f1');
+	});
+
+	it('employee.color null → colore di default #6366f1', () => {
+		const user = mapUserDTO({ ...baseDTO, employee: { ...baseDTO.employee!, color: null } });
+		expect(user.color).toBe('#6366f1');
 	});
 });
 

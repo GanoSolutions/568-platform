@@ -142,6 +142,7 @@ namespace Five68
 			// Facades
 			services.AddScoped<RefreshTokenFacade>();
 			services.AddScoped<UserFacade>();
+			services.AddScoped<EmployeeFacade>();
 
 			// Services
 			services.AddScoped<AuthService>();
