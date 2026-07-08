@@ -1,32 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { userApi, type UserDTO } from '@/lib/apiClient';
+import { userApi, UserStatus, type UserDTO } from '@/lib/apiClient';
 import { getNextColor } from '@/lib/colorUtils';
 import type { EmployeeDetail } from '@/types';
 
 /**
  * Mappa un UserDTO del backend C# nel modello EmployeeDetail del frontend.
  *
- * GET /user espone solo i dati del profilo (User), non quelli anagrafici del
- * dipendente: codice fiscale, telefono, fine contratto e il flag `invited`
- * arriveranno con GET /employees (issue #22) e per ora vengono defaultati.
+ * I dati anagrafici (nome, cognome, codice fiscale, telefono, colore, fine
+ * contratto) sono annidati in `dto.employee`, che è presente solo dopo che
+ * l'utente ha accettato l'invito; prima di allora abbiamo solo email e stato.
  */
 function mapUserDTOToEmployee(dto: UserDTO): EmployeeDetail {
-	// status: Pending=0, Active=1, Disabled=2 → chi non è Pending ha già accettato l'invito
-	const firstLoginCompleted = dto.status !== 0;
+	const emp = dto.employee;
 
 	return {
 		id: dto.id,
-		name: dto.fullName,
+		name: emp ? `${emp.name} ${emp.surname}`.trim() : dto.email,
 		email: dto.email,
 		role: dto.role === 0 ? 'admin' : dto.role === 1 ? 'manager' : 'employee',
-		color: dto.color ?? '#6366f1',
-		fiscalCode: '',
-		phone: '',
-		contractEnd: '',
-		// interim: chi ha completato il primo accesso è necessariamente stato invitato
-		invited: firstLoginCompleted,
-		firstLoginCompleted,
+		color: emp?.color ?? '#6366f1',
+		fiscalCode: emp?.fiscalCode ?? '',
+		phone: emp?.phone ?? '',
+		contractEnd: emp?.contractEnd ?? '',
+		// invito esistente = qualsiasi stato oltre Pending; primo accesso completato = Active o Disabled
+		invited: dto.status !== UserStatus.Pending,
+		firstLoginCompleted: dto.status >= UserStatus.Active,
 	};
 }
 
