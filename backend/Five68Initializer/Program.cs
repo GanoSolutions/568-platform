@@ -70,7 +70,7 @@ namespace Five68.Initializer
 			DateTime wed = today;             // mer 01/07 — oggi, 3 dipendenti
 			DateTime thu = today.AddDays(1);  // gio 02/07 — cambio turno pendente
 			DateTime fri = today.AddDays(2);  // ven 03/07 — 3 dipendenti (1 parziale)
-			// sab 04/07 — nessun turno creato (giorno vuoto)
+											  // sab 04/07 — nessun turno creato (giorno vuoto)
 			DateTime sun = today.AddDays(4);  // dom 05/07 — chiusura
 
 			(Guid shiftMonId, Guid shiftTueId, Guid shiftWedId, Guid shiftThuId, Guid shiftFriId, Guid shiftSunId) = (
@@ -86,7 +86,6 @@ namespace Five68.Initializer
 					Role = UserRole.Admin,
 					Status = UserStatus.Active,
 					PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
-					Employee = new Employee { UserId = adminId, Name = "Admin", Surname = "Admin", FiscalCode = "ADM001", Phone = "3200000000", Color = "#3633f1" }
 				},
 				new User {
 					Id = managerId,
