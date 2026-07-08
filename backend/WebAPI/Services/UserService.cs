@@ -138,7 +138,7 @@ namespace Five68.Services
 
 			if (!userUtils_.CheckPassword(user, model.CurrentPassword))
 			{
-				throw new UnauthorizedException("Current password is incorrect");
+				throw new EntityException("Current password is incorrect");
 			}
 
 			user.PasswordHash = userUtils_.HashAndCheckPassword(model.NewPassword);

@@ -120,7 +120,8 @@ namespace Five68.Controllers
 		/// </summary>
 		/// <response code="204">Password changed successfully.</response>
 		/// <response code="400">New password does not meet requirements.</response>
-		/// <response code="401">Caller is not authenticated or current password is incorrect.</response>
+		/// <response code="401">Caller is not authenticated.</response>
+		/// <response code="422">Current password is incorrect.</response>
 		[Authorize]
 		[HttpPost("password")]
 		public async Task<IActionResult> ChangePassword([FromBody] ChangePassword model)
