@@ -49,6 +49,11 @@ export interface UserRegisterPayload {
 	role: UserRoleCode;
 }
 
+export interface ChangePasswordPayload {
+	currentPassword: string;
+	newPassword: string;
+}
+
 // ---------------------------------------------------------------------------
 // Token storage
 // ---------------------------------------------------------------------------
@@ -279,4 +284,7 @@ export const userApi = {
 
 	acceptInvite: (token: string, password: string) =>
 		api.post<void>('/user/invite/accept', { token, password }),
+
+	changePassword: (payload: ChangePasswordPayload) =>
+		api.post<void>('/user/password', payload),
 };
