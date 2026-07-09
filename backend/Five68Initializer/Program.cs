@@ -73,8 +73,14 @@ namespace Five68.Initializer
 											  // sab 04/07 — nessun turno creato (giorno vuoto)
 			DateTime sun = today.AddDays(4);  // dom 05/07 — chiusura
 
-			(Guid shiftMonId, Guid shiftTueId, Guid shiftWedId, Guid shiftThuId, Guid shiftFriId, Guid shiftSunId) = (
-				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
+			// Orari standard: feriale 18:00-23:59 (fino a mezzanotte), turno ridotto 19:00-22:00
+			TimeOnly fullStart = new TimeOnly(18, 0);
+			TimeOnly fullEnd = new TimeOnly(23, 59);
+			TimeOnly partialStart = new TimeOnly(19, 0);
+			TimeOnly partialEnd = new TimeOnly(22, 0);
+
+			(Guid luigiThuAssignmentId, Guid annaTueAssignmentId, Guid marcoFriAssignmentId) = (
+				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
 			);
 
 			// --- 1. USERS & EMPLOYEES ---
@@ -127,36 +133,75 @@ namespace Five68.Initializer
 				},
 			]);
 
-			// --- 2. SHIFTS ---
-			// Varietà: chiuso, singolo, multiplo, con parziale, vuoto (sab = nessuna riga)
-			db.Shifts.AddRange([
-				new Shift { Id = shiftMonId, WorkDate = mon, IsClosed = true,  CreatedBy = adminId   }, // lunedì chiuso
-				new Shift { Id = shiftTueId, WorkDate = tue, IsClosed = false, CreatedBy = managerId  }, // 2 dipendenti, 1 parziale
-				new Shift { Id = shiftWedId, WorkDate = wed, IsClosed = false, CreatedBy = managerId  }, // oggi, 3 dipendenti
-				new Shift { Id = shiftThuId, WorkDate = thu, IsClosed = false, CreatedBy = managerId  }, // cambio pendente
-				new Shift { Id = shiftFriId, WorkDate = fri, IsClosed = false, CreatedBy = adminId    }, // 3 dipendenti, 1 parziale
-				new Shift { Id = shiftSunId, WorkDate = sun, IsClosed = true,  CreatedBy = adminId    }, // domenica chiusa
-			]);
+			// --- 2. CLOSED DAYS ---
+			// Il locale chiude sempre di domenica e lunedì (chiusura settimanale ricorrente).
+			// Nel seed la materializziamo solo per una finestra di qualche mese intorno a oggi
+			// (dato di sviluppo, non serve coprire l'anno intero) — in produzione questa
+			// generazione andrà rifatta periodicamente da un job dedicato (fuori scope qui),
+			// altrimenti oltre la finestra generata le domeniche/lunedì risulterebbero aperte.
+			// Festività italiane classiche e ferie estive restano invece sull'anno intero.
+			int seedYear = today.Year;
+			DateOnly weeklyClosuresStart = DateOnly.FromDateTime(today.AddMonths(-3));
+			DateOnly weeklyClosuresEnd = DateOnly.FromDateTime(today.AddMonths(4));
+
+			List<DateOnly> weeklyClosures = [];
+			for (DateOnly d = weeklyClosuresStart; d <= weeklyClosuresEnd; d = d.AddDays(1))
+			{
+				if (d.DayOfWeek is DayOfWeek.Sunday or DayOfWeek.Monday)
+				{
+					weeklyClosures.Add(d);
+				}
+			}
+
+			DateOnly easterMonday = EasterSunday(seedYear).AddDays(1);
+
+			List<DateOnly> italianHolidays = [
+				new DateOnly(seedYear, 1, 1),   // Capodanno
+				new DateOnly(seedYear, 1, 6),   // Epifania
+				easterMonday,                    // Pasquetta
+				new DateOnly(seedYear, 4, 25),  // Festa della Liberazione
+				new DateOnly(seedYear, 5, 1),   // Festa dei Lavoratori
+				new DateOnly(seedYear, 6, 2),   // Festa della Repubblica
+				new DateOnly(seedYear, 8, 15),  // Ferragosto
+				new DateOnly(seedYear, 11, 1),  // Ognissanti
+				new DateOnly(seedYear, 12, 8),  // Immacolata Concezione
+				new DateOnly(seedYear, 12, 24), // Vigilia di Natale
+				new DateOnly(seedYear, 12, 25), // Natale
+				new DateOnly(seedYear, 12, 26), // Santo Stefano
+				new DateOnly(seedYear, 12, 31), // San Silvestro
+			];
+
+			DateOnly summerVacationStart = new DateOnly(seedYear, 8, 8); // subito dopo la prima settimana di agosto
+			List<DateOnly> summerVacation = Enumerable.Range(0, 14).Select(offset => summerVacationStart.AddDays(offset)).ToList();
+
+			List<ClosedDay> closedDays = weeklyClosures
+				.Concat(italianHolidays)
+				.Concat(summerVacation)
+				.Distinct()
+				.Select(d => new ClosedDay { Id = Guid.NewGuid(), Date = d, CreatedBy = adminId })
+				.ToList();
+
+			db.ClosedDays.AddRange(closedDays);
 
 			// --- 3. SHIFT ASSIGNMENTS ---
 			db.ShiftAssignments.AddRange([
 				// mar: luigi (completo) + anna (parziale)
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftTueId, Date = tue, EmployeeId = luigiId, IsPartial = false },
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftTueId, Date = tue, EmployeeId = annaId,  IsPartial = true  },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(tue), EmployeeId = luigiId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
+				new ShiftAssignment { Id = annaTueAssignmentId, Date = DateOnly.FromDateTime(tue), EmployeeId = annaId, StartTime = partialStart, EndTime = partialEnd, CreatedBy = managerId },
 
 				// mer (oggi): luigi + anna + manager
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftWedId, Date = wed, EmployeeId = luigiId,   IsPartial = false },
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftWedId, Date = wed, EmployeeId = annaId,    IsPartial = false },
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftWedId, Date = wed, EmployeeId = managerId, IsPartial = false },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = luigiId,   StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = annaId,    StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = managerId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
 
 				// gio: luigi (ha richiesta di cambio pendente) + marco
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftThuId, Date = thu, EmployeeId = luigiId, IsPartial = false },
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftThuId, Date = thu, EmployeeId = marcoId, IsPartial = false },
+				new ShiftAssignment { Id = luigiThuAssignmentId, Date = DateOnly.FromDateTime(thu), EmployeeId = luigiId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(thu), EmployeeId = marcoId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
 
 				// ven: manager + anna + marco (parziale)
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftFriId, Date = fri, EmployeeId = managerId, IsPartial = false },
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftFriId, Date = fri, EmployeeId = annaId,    IsPartial = false },
-				new ShiftAssignment { Id = Guid.NewGuid(), ShiftId = shiftFriId, Date = fri, EmployeeId = marcoId,   IsPartial = true  },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = managerId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = adminId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = annaId,    StartTime = fullStart, EndTime = fullEnd, CreatedBy = adminId },
+				new ShiftAssignment { Id = marcoFriAssignmentId, Date = DateOnly.FromDateTime(fri), EmployeeId = marcoId, StartTime = partialStart, EndTime = partialEnd, CreatedBy = adminId },
 			]);
 
 			// --- 4. SWAP REQUESTS ---
@@ -164,21 +209,21 @@ namespace Five68.Initializer
 			db.SwapRequests.AddRange([
 				new SwapRequest { // luigi chiede ad anna di coprire il suo gio (pendente, luigi appare evidenziato)
 					Id = Guid.NewGuid(),
-					ShiftId = shiftThuId,
+					ShiftAssignmentId = luigiThuAssignmentId,
 					RequesterId = luigiId,
 					TargetEmployeeId = annaId,
 					Status = SwapRequestStatus.Pending
 				},
-				new SwapRequest { // anna aveva chiesto a luigi di coprire mar → accettato
+				new SwapRequest { // anna aveva chiesto a luigi di coprire il suo mar (parziale) → accettato
 					Id = Guid.NewGuid(),
-					ShiftId = shiftTueId,
+					ShiftAssignmentId = annaTueAssignmentId,
 					RequesterId = annaId,
 					TargetEmployeeId = luigiId,
 					Status = SwapRequestStatus.Accepted
 				},
-				new SwapRequest { // marco aveva chiesto a luigi di coprire mer → rifiutato
+				new SwapRequest { // marco aveva chiesto a luigi di coprire il suo ven (parziale) → rifiutato
 					Id = Guid.NewGuid(),
-					ShiftId = shiftWedId,
+					ShiftAssignmentId = marcoFriAssignmentId,
 					RequesterId = marcoId,
 					TargetEmployeeId = luigiId,
 					Status = SwapRequestStatus.Rejected
@@ -186,6 +231,26 @@ namespace Five68.Initializer
 			]);
 
 			db.SaveChanges();
+		}
+
+		// Algoritmo di Meeus/Jones/Butcher per la Pasqua (calendario gregoriano)
+		private static DateOnly EasterSunday(int year)
+		{
+			int a = year % 19;
+			int b = year / 100;
+			int c = year % 100;
+			int d = b / 4;
+			int e = b % 4;
+			int f = (b + 8) / 25;
+			int g = (b - f + 1) / 3;
+			int h = (19 * a + b - d - g + 15) % 30;
+			int i = c / 4;
+			int k = c % 4;
+			int l = (32 + 2 * e + 2 * i - h - k) % 7;
+			int m = (a + 11 * h + 22 * l) / 451;
+			int month = (h + l - 7 * m + 114) / 31;
+			int day = ((h + l - 7 * m + 114) % 31) + 1;
+			return new DateOnly(year, month, day);
 		}
 	}
 }
