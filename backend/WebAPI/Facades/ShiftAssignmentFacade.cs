@@ -12,17 +12,19 @@ namespace Five68.Facades
 			context_ = context;
 		}
 
-		internal async Task CreateAsync(ShiftAssignment sa)
+		internal async Task<ShiftAssignment> CreateAsync(ShiftAssignment sa)
 		{
 			await context_.ShiftAssignments.AddAsync(sa);
 			await context_.SaveChangesAsync();
+			return sa;
 		}
 
-		internal async Task UpdateAsync(ShiftAssignment sa)
+		internal async Task<ShiftAssignment> UpdateAsync(ShiftAssignment sa)
 		{
 			sa.UpdatedAt = DateTime.UtcNow;
 			context_.ShiftAssignments.Update(sa);
 			await context_.SaveChangesAsync();
+			return sa;
 		}
 
 		internal async Task DeleteAsync(ShiftAssignment sa)
@@ -34,7 +36,6 @@ namespace Five68.Facades
 		internal async Task<ShiftAssignment> FindByIdAsync(Guid id)
 		{
 			return await context_.ShiftAssignments
-				.Include(x => x.Employee)
 				.FirstOrDefaultAsync(x => x.Id == id);
 		}
 
@@ -47,7 +48,6 @@ namespace Five68.Facades
 		internal async Task<IEnumerable<ShiftAssignment>> GetByDateRangeAsync(DateOnly startDate, DateOnly endDate)
 		{
 			return await context_.ShiftAssignments
-				.Include(x => x.Employee)
 				.Where(x => x.Date >= startDate && x.Date <= endDate)
 				.OrderBy(x => x.Date)
 				.ToListAsync();
