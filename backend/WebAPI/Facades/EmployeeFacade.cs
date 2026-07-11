@@ -25,5 +25,10 @@ namespace Five68.Facades
 			context_.Employees.Update(emp);
 			await context_.SaveChangesAsync();
 		}
+
+		internal async Task<Employee> FindByIdAsync(Guid userId)
+		{
+			return await context_.Employees.FirstOrDefaultAsync(x => x.UserId == userId);
+		}
 	}
 }

@@ -23,17 +23,17 @@ Web app per la gestione dei turni settimanali del locale 568.
 ```text
 ┌─────────────────────┐        REST API        ┌─────────────────────────┐
 │   Frontend (React)  │ ─────────────────────► │   Backend (.NET 10)     │
-│                     │                         │   WebAPI  :8080         │
+│                     │                        │   WebAPI  :8080         │
 │  • UI Components    │ ◄───────────────────── │  • Controllers          │
-│  • React Router     │        JSON             │  • Facades / Services   │
-│  • HTTP calls       │                         │  • JWT Auth             │
-└─────────────────────┘                         │  • EF Core              │
-                                                 └───────────┬─────────────┘
-                                                             │
-                                                     ┌───────▼──────┐
-                                                     │  PostgreSQL  │
-                                                     │  :5432       │
-                                                     └──────────────┘
+│  • React Router     │        JSON            │  • Facades / Services   │
+│  • HTTP calls       │                        │  • JWT Auth             │
+└─────────────────────┘                        │  • EF Core              │
+                                               └───────────┬─────────────┘
+                                                           │
+                                                   ┌───────▼──────┐
+                                                   │  PostgreSQL  │
+                                                   │  :5432       │
+                                                   └──────────────┘
 ```
 
 Le notifiche email e Telegram rimangono gestite tramite **Supabase Edge Functions** (folder `supabase/functions/`). (todo: da rimuovere)
@@ -116,10 +116,7 @@ Prima di avviare, assicurati che il file `backend/WebAPI/appsettings.Development
 #### Avvio
 
 ```bash
-# Avvia database + backend API
-docker compose up --build
-
-# Oppure in background
+# Avvia servizi compilando i sorgenti
 docker compose up --build -d
 ```
 
@@ -130,9 +127,6 @@ La Swagger UI è accessibile su `http://localhost:8080/swagger` (solo in ambient
 
 ```bash
 docker compose down
-
-# Per eliminare anche il volume del database
-docker compose down -v
 ```
 
 ---
