@@ -70,14 +70,18 @@ namespace Five68.Initializer
 			DateTime wed = today;             // mer 01/07 — oggi, 3 dipendenti
 			DateTime thu = today.AddDays(1);  // gio 02/07 — cambio turno pendente
 			DateTime fri = today.AddDays(2);  // ven 03/07 — 3 dipendenti (1 parziale)
-											  // sab 04/07 — nessun turno creato (giorno vuoto)
+			DateTime sat = today.AddDays(3);  // sab 04/07 — anna (completo) + marco (notturno, a cavallo della mezzanotte)
 			DateTime sun = today.AddDays(4);  // dom 05/07 — chiusura
 
-			// Orari standard: feriale 18:00-00:00 (6h), turno ridotto 19:00-22:00 (3h)
+			// Orari standard: feriale 18:00-00:00 (6h), turno ridotto 19:00-22:00 (3h),
+			// turno notturno del weekend 22:00-02:00 del giorno dopo (4h, dimostra un turno
+			// che attraversa la mezzanotte)
 			TimeOnly fullStart = new TimeOnly(18, 0);
 			TimeSpan fullDuration = TimeSpan.FromHours(6);
 			TimeOnly partialStart = new TimeOnly(19, 0);
 			TimeSpan partialDuration = TimeSpan.FromHours(3);
+			TimeOnly nightStart = new TimeOnly(22, 0);
+			TimeSpan nightDuration = TimeSpan.FromHours(4);
 
 			(Guid luigiThuAssignmentId, Guid annaTueAssignmentId, Guid marcoFriAssignmentId) = (
 				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
@@ -202,6 +206,10 @@ namespace Five68.Initializer
 				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = managerId, StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
 				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = annaId,    StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
 				new ShiftAssignment { Id = marcoFriAssignmentId, Date = DateOnly.FromDateTime(fri), EmployeeId = marcoId, StartTime = partialStart, Duration = partialDuration, CreatedBy = adminId },
+
+				// sab: anna (completo) + marco (notturno, chiude alle 02:00 di domenica)
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(sat), EmployeeId = annaId, StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(sat), EmployeeId = marcoId, StartTime = nightStart, Duration = nightDuration, CreatedBy = adminId },
 			]);
 
 			// --- 4. SWAP REQUESTS ---
