@@ -221,8 +221,7 @@ La documentazione completa è disponibile via Swagger su `http://localhost:8080/
 | --- | --- |
 | `Users` | Profili, ruoli (`Admin`, `Manager`, `Employee`), stato, hash password |
 | `Employees` | Dati dipendente (es. codice fiscale), chiave esterna su `Users` |
-| `Shifts` | Un turno per data, creato da un utente |
-| `ShiftAssignments` | Assegnazione dipendente a un turno |
+| `Shifts` | Turno di un dipendente (data, orario di inizio, durata) |
 | `SwapRequests` | Richieste di cambio turno tra dipendenti |
 | `RefreshTokens` | Token di rinnovo JWT per sessione utente |
 

@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Five68.Models.DTO
 {
-	public class ShiftAssignmentCreate
+	public class ShiftCreate
 	{
 		[Required]
 		public Guid EmployeeId { get; set; }
@@ -18,7 +18,7 @@ namespace Five68.Models.DTO
 		public TimeSpan Duration { get; set; }
 	}
 
-	public class ShiftAssignmentUpdate
+	public class ShiftUpdate
 	{
 		[Required]
 		[DataType(DataType.Time)]

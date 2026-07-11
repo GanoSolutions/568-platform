@@ -1,6 +1,6 @@
 namespace Five68.Models
 {
-	public class ShiftAssignment
+	public class Shift
 	{
 		public required Guid Id { get; set; }
 		public required DateOnly Date { get; set; }

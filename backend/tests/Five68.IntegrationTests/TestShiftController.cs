@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Five68.IntegrationTests;
 
 [Collection("Integration")]
-public class TestShiftAssignmentController
+public class TestShiftController
 {
     private readonly HttpClient client_;
     private readonly Five68WebAppFactory factory_;
@@ -24,7 +24,7 @@ public class TestShiftAssignmentController
     private const string EmployeeEmail = "employee@five68.com";
     private const string Password = "ValidP@ss1!";
 
-    public TestShiftAssignmentController(Five68WebAppFactory factory)
+    public TestShiftController(Five68WebAppFactory factory)
     {
         factory_ = factory;
         client_ = factory.CreateClient();
@@ -53,7 +53,7 @@ public class TestShiftAssignmentController
     }
 
     // Crea un utente Employee completo di riga t_employees, cosi' puo' essere
-    // usato come EmployeeId target di uno ShiftAssignment (FK richiesta).
+    // usato come EmployeeId target di uno Shift (FK richiesta).
     private Guid CreateEmployee(string email)
     {
         using IServiceScope scope = factory_.Services.CreateScope();
@@ -80,13 +80,13 @@ public class TestShiftAssignmentController
         return id;
     }
 
-    private Guid SeedShiftAssignment(Guid employeeId, DateOnly date, TimeOnly start, TimeSpan duration, Guid createdBy)
+    private Guid SeedShift(Guid employeeId, DateOnly date, TimeOnly start, TimeSpan duration, Guid createdBy)
     {
         using IServiceScope scope = factory_.Services.CreateScope();
         Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 
         Guid id = Guid.NewGuid();
-        db.ShiftAssignments.Add(new ShiftAssignment
+        db.Shifts.Add(new Shift
         {
             Id = id,
             Date = date,
@@ -137,17 +137,17 @@ public class TestShiftAssignmentController
         return db.Users.First(u => u.Email == email).Id;
     }
 
-    private bool ShiftAssignmentExists(Guid id)
+    private bool ShiftExists(Guid id)
     {
         using IServiceScope scope = factory_.Services.CreateScope();
         Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-        return db.ShiftAssignments.Any(x => x.Id == id);
+        return db.Shifts.Any(x => x.Id == id);
     }
 
-    // --- GET /shiftassignment/{id} ---
+    // --- GET /shift/{id} ---
 
     [Fact]
-    public async Task GetById_ExistingId_Returns200WithShiftAssignment()
+    public async Task GetById_ExistingId_Returns200WithShift()
     {
         await AuthorizeAsAsync(AdminEmail);
         Guid adminId = GetUserId(AdminEmail);
@@ -155,12 +155,12 @@ public class TestShiftAssignmentController
         DateOnly date = new(2031, 1, 10);
         TimeOnly start = new(9, 0);
         TimeSpan duration = TimeSpan.FromHours(8);
-        Guid shiftId = SeedShiftAssignment(employeeId, date, start, duration, adminId);
+        Guid shiftId = SeedShift(employeeId, date, start, duration, adminId);
 
-        HttpResponseMessage response = await client_.GetAsync($"/shiftassignment/{shiftId}");
+        HttpResponseMessage response = await client_.GetAsync($"/shift/{shiftId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        ShiftAssignmentDTO? dto = await response.Content.ReadFromJsonAsync<ShiftAssignmentDTO>();
+        ShiftDTO? dto = await response.Content.ReadFromJsonAsync<ShiftDTO>();
         dto!.Id.Should().Be(shiftId);
         dto.EmployeeId.Should().Be(employeeId);
         dto.Date.Should().Be(date);
@@ -173,7 +173,7 @@ public class TestShiftAssignmentController
     public async Task GetById_UnknownId_Returns404()
     {
         await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.GetAsync($"/shiftassignment/{Guid.NewGuid()}");
+        HttpResponseMessage response = await client_.GetAsync($"/shift/{Guid.NewGuid()}");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -182,12 +182,12 @@ public class TestShiftAssignmentController
     public async Task GetById_Unauthenticated_Returns401()
     {
         client_.DefaultRequestHeaders.Authorization = null;
-        HttpResponseMessage response = await client_.GetAsync($"/shiftassignment/{Guid.NewGuid()}");
+        HttpResponseMessage response = await client_.GetAsync($"/shift/{Guid.NewGuid()}");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // --- GET /shiftassignment?startDate=&endDate= ---
+    // --- GET /shift?startDate=&endDate= ---
 
     [Fact]
     public async Task GetByDateRange_ShiftsWithinRange_ReturnsOnlyThoseOrderedByDate()
@@ -205,15 +205,15 @@ public class TestShiftAssignmentController
         DateOnly outsideDay = new(2031, 2, 20);
         TimeSpan duration = TimeSpan.FromHours(8);
 
-        SeedShiftAssignment(emp3, day3, new TimeOnly(9, 0), duration, adminId);
-        SeedShiftAssignment(emp1, day1, new TimeOnly(9, 0), duration, adminId);
-        SeedShiftAssignment(emp2, day2, new TimeOnly(9, 0), duration, adminId);
-        SeedShiftAssignment(empOutside, outsideDay, new TimeOnly(9, 0), duration, adminId);
+        SeedShift(emp3, day3, new TimeOnly(9, 0), duration, adminId);
+        SeedShift(emp1, day1, new TimeOnly(9, 0), duration, adminId);
+        SeedShift(emp2, day2, new TimeOnly(9, 0), duration, adminId);
+        SeedShift(empOutside, outsideDay, new TimeOnly(9, 0), duration, adminId);
 
-        HttpResponseMessage response = await client_.GetAsync($"/shiftassignment?startDate={day1:yyyy-MM-dd}&endDate={day3:yyyy-MM-dd}");
+        HttpResponseMessage response = await client_.GetAsync($"/shift?startDate={day1:yyyy-MM-dd}&endDate={day3:yyyy-MM-dd}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        List<ShiftAssignmentDTO>? list = await response.Content.ReadFromJsonAsync<List<ShiftAssignmentDTO>>();
+        List<ShiftDTO>? list = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
         list.Should().HaveCount(3);
         list.Should().BeInAscendingOrder(x => x.Date);
         list!.Select(x => x.EmployeeId).Should().NotContain(empOutside);
@@ -223,10 +223,10 @@ public class TestShiftAssignmentController
     public async Task GetByDateRange_NoShiftsInRange_ReturnsEmptyList()
     {
         await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.GetAsync("/shiftassignment?startDate=2099-01-01&endDate=2099-01-31");
+        HttpResponseMessage response = await client_.GetAsync("/shift?startDate=2099-01-01&endDate=2099-01-31");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        List<ShiftAssignmentDTO>? list = await response.Content.ReadFromJsonAsync<List<ShiftAssignmentDTO>>();
+        List<ShiftDTO>? list = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
         list.Should().BeEmpty();
     }
 
@@ -234,7 +234,7 @@ public class TestShiftAssignmentController
     public async Task GetByDateRange_EndBeforeStart_Returns422()
     {
         await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.GetAsync("/shiftassignment?startDate=2031-02-10&endDate=2031-02-01");
+        HttpResponseMessage response = await client_.GetAsync("/shift?startDate=2031-02-10&endDate=2031-02-01");
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
@@ -243,12 +243,12 @@ public class TestShiftAssignmentController
     public async Task GetByDateRange_Unauthenticated_Returns401()
     {
         client_.DefaultRequestHeaders.Authorization = null;
-        HttpResponseMessage response = await client_.GetAsync("/shiftassignment?startDate=2031-02-01&endDate=2031-02-10");
+        HttpResponseMessage response = await client_.GetAsync("/shift?startDate=2031-02-01&endDate=2031-02-10");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // --- POST /shiftassignment ---
+    // --- POST /shift ---
 
     [Fact]
     public async Task Create_ManagerValidShift_Returns201AndPersists()
@@ -258,7 +258,7 @@ public class TestShiftAssignmentController
         Guid employeeId = CreateEmployee("sa-create-manager@five68.com");
         DateOnly date = new(2031, 3, 1);
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = date,
@@ -267,12 +267,12 @@ public class TestShiftAssignmentController
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        ShiftAssignmentDTO? dto = await response.Content.ReadFromJsonAsync<ShiftAssignmentDTO>();
+        ShiftDTO? dto = await response.Content.ReadFromJsonAsync<ShiftDTO>();
         dto!.EmployeeId.Should().Be(employeeId);
         dto.Date.Should().Be(date);
         dto.Duration.Should().Be(TimeSpan.FromHours(8));
         dto.CreatedBy.Should().Be(managerId);
-        ShiftAssignmentExists(dto.Id).Should().BeTrue();
+        ShiftExists(dto.Id).Should().BeTrue();
     }
 
     [Fact]
@@ -281,7 +281,7 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(AdminEmail);
         Guid employeeId = CreateEmployee("sa-create-admin@five68.com");
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = new DateOnly(2031, 3, 2),
@@ -298,7 +298,7 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(EmployeeEmail);
         Guid employeeId = CreateEmployee("sa-create-forbidden@five68.com");
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = new DateOnly(2031, 3, 3),
@@ -313,7 +313,7 @@ public class TestShiftAssignmentController
     public async Task Create_Unauthenticated_Returns401()
     {
         client_.DefaultRequestHeaders.Authorization = null;
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = Guid.NewGuid(),
             Date = new DateOnly(2031, 3, 4),
@@ -328,7 +328,7 @@ public class TestShiftAssignmentController
     public async Task Create_UnknownEmployee_Returns404()
     {
         await AuthorizeAsAsync(ManagerEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = Guid.NewGuid(),
             Date = new DateOnly(2031, 3, 5),
@@ -345,7 +345,7 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-create-zeroduration@five68.com");
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = new DateOnly(2031, 3, 6),
@@ -362,7 +362,7 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-create-toolong@five68.com");
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = new DateOnly(2031, 3, 9),
@@ -382,7 +382,7 @@ public class TestShiftAssignmentController
         TimeOnly start = new(22, 0);
         TimeSpan duration = TimeSpan.FromHours(4); // 22:00 -> 02:00 del giorno dopo
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = date,
@@ -391,7 +391,7 @@ public class TestShiftAssignmentController
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        ShiftAssignmentDTO? dto = await response.Content.ReadFromJsonAsync<ShiftAssignmentDTO>();
+        ShiftDTO? dto = await response.Content.ReadFromJsonAsync<ShiftDTO>();
         dto!.Date.Should().Be(date);
         dto.StartTime.Should().Be(start);
         dto.Duration.Should().Be(duration);
@@ -406,7 +406,7 @@ public class TestShiftAssignmentController
         DateOnly date = new(2031, 3, 7);
         SeedClosedDay(date, managerId);
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = date,
@@ -424,9 +424,9 @@ public class TestShiftAssignmentController
         Guid managerId = GetUserId(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-create-duplicate@five68.com");
         DateOnly date = new(2031, 3, 8);
-        SeedShiftAssignment(employeeId, date, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+        SeedShift(employeeId, date, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/shiftassignment", new ShiftAssignmentCreate
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift", new ShiftCreate
         {
             EmployeeId = employeeId,
             Date = date,
@@ -443,12 +443,12 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         StringContent content = new("{not-valid-json", Encoding.UTF8, "application/json");
 
-        HttpResponseMessage response = await client_.PostAsync("/shiftassignment", content);
+        HttpResponseMessage response = await client_.PostAsync("/shift", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // --- PUT /shiftassignment/{id} ---
+    // --- PUT /shift/{id} ---
 
     [Fact]
     public async Task Update_ManagerValidTimes_Returns200AndPersists()
@@ -456,24 +456,24 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         Guid managerId = GetUserId(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-update-manager@five68.com");
-        Guid shiftId = SeedShiftAssignment(employeeId, new DateOnly(2031, 4, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 4, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
         TimeOnly newStart = new(10, 0);
         TimeSpan newDuration = TimeSpan.FromHours(8);
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{shiftId}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{shiftId}", new ShiftUpdate
         {
             StartTime = newStart,
             Duration = newDuration,
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        ShiftAssignmentDTO? dto = await response.Content.ReadFromJsonAsync<ShiftAssignmentDTO>();
+        ShiftDTO? dto = await response.Content.ReadFromJsonAsync<ShiftDTO>();
         dto!.StartTime.Should().Be(newStart);
         dto.Duration.Should().Be(newDuration);
 
         using IServiceScope scope = factory_.Services.CreateScope();
         Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-        ShiftAssignment updated = db.ShiftAssignments.First(x => x.Id == shiftId);
+        Shift updated = db.Shifts.First(x => x.Id == shiftId);
         updated.StartTime.Should().Be(newStart);
         updated.Duration.Should().Be(newDuration);
     }
@@ -484,10 +484,10 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(AdminEmail);
         Guid adminId = GetUserId(AdminEmail);
         Guid employeeId = CreateEmployee("sa-update-forbidden@five68.com");
-        Guid shiftId = SeedShiftAssignment(employeeId, new DateOnly(2031, 4, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), adminId);
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 4, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), adminId);
 
         await AuthorizeAsAsync(EmployeeEmail);
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{shiftId}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{shiftId}", new ShiftUpdate
         {
             StartTime = new TimeOnly(10, 0),
             Duration = TimeSpan.FromHours(8),
@@ -500,7 +500,7 @@ public class TestShiftAssignmentController
     public async Task Update_Unauthenticated_Returns401()
     {
         client_.DefaultRequestHeaders.Authorization = null;
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{Guid.NewGuid()}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{Guid.NewGuid()}", new ShiftUpdate
         {
             StartTime = new TimeOnly(9, 0),
             Duration = TimeSpan.FromHours(8),
@@ -513,7 +513,7 @@ public class TestShiftAssignmentController
     public async Task Update_UnknownId_Returns404()
     {
         await AuthorizeAsAsync(ManagerEmail);
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{Guid.NewGuid()}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{Guid.NewGuid()}", new ShiftUpdate
         {
             StartTime = new TimeOnly(9, 0),
             Duration = TimeSpan.FromHours(8),
@@ -528,9 +528,9 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         Guid managerId = GetUserId(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-update-zeroduration@five68.com");
-        Guid shiftId = SeedShiftAssignment(employeeId, new DateOnly(2031, 4, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 4, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{shiftId}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{shiftId}", new ShiftUpdate
         {
             StartTime = new TimeOnly(9, 0),
             Duration = TimeSpan.Zero,
@@ -545,9 +545,9 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         Guid managerId = GetUserId(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-update-toolong@five68.com");
-        Guid shiftId = SeedShiftAssignment(employeeId, new DateOnly(2031, 4, 6), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 4, 6), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{shiftId}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{shiftId}", new ShiftUpdate
         {
             StartTime = new TimeOnly(9, 0),
             Duration = TimeSpan.FromHours(25),
@@ -562,18 +562,18 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         Guid managerId = GetUserId(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-update-overnight@five68.com");
-        Guid shiftId = SeedShiftAssignment(employeeId, new DateOnly(2031, 4, 7), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 4, 7), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
         TimeOnly newStart = new(22, 0);
         TimeSpan newDuration = TimeSpan.FromHours(4); // 22:00 -> 02:00 del giorno dopo
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{shiftId}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{shiftId}", new ShiftUpdate
         {
             StartTime = newStart,
             Duration = newDuration,
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        ShiftAssignmentDTO? dto = await response.Content.ReadFromJsonAsync<ShiftAssignmentDTO>();
+        ShiftDTO? dto = await response.Content.ReadFromJsonAsync<ShiftDTO>();
         dto!.StartTime.Should().Be(newStart);
         dto.Duration.Should().Be(newDuration);
     }
@@ -585,10 +585,10 @@ public class TestShiftAssignmentController
         Guid managerId = GetUserId(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-update-closedday@five68.com");
         DateOnly date = new(2031, 4, 4);
-        Guid shiftId = SeedShiftAssignment(employeeId, date, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+        Guid shiftId = SeedShift(employeeId, date, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
         SeedClosedDay(date, managerId);
 
-        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shiftassignment/{shiftId}", new ShiftAssignmentUpdate
+        HttpResponseMessage response = await client_.PutAsJsonAsync($"/shift/{shiftId}", new ShiftUpdate
         {
             StartTime = new TimeOnly(10, 0),
             Duration = TimeSpan.FromHours(8),
@@ -597,7 +597,7 @@ public class TestShiftAssignmentController
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
 
-    // --- DELETE /shiftassignment/{id} ---
+    // --- DELETE /shift/{id} ---
 
     [Fact]
     public async Task Delete_ManagerExistingId_Returns204AndRemoves()
@@ -605,12 +605,12 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(ManagerEmail);
         Guid managerId = GetUserId(ManagerEmail);
         Guid employeeId = CreateEmployee("sa-delete-manager@five68.com");
-        Guid shiftId = SeedShiftAssignment(employeeId, new DateOnly(2031, 5, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 5, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
-        HttpResponseMessage response = await client_.DeleteAsync($"/shiftassignment/{shiftId}");
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{shiftId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-        ShiftAssignmentExists(shiftId).Should().BeFalse();
+        ShiftExists(shiftId).Should().BeFalse();
     }
 
     [Fact]
@@ -619,20 +619,20 @@ public class TestShiftAssignmentController
         await AuthorizeAsAsync(AdminEmail);
         Guid adminId = GetUserId(AdminEmail);
         Guid employeeId = CreateEmployee("sa-delete-forbidden@five68.com");
-        Guid shiftId = SeedShiftAssignment(employeeId, new DateOnly(2031, 5, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), adminId);
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 5, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), adminId);
 
         await AuthorizeAsAsync(EmployeeEmail);
-        HttpResponseMessage response = await client_.DeleteAsync($"/shiftassignment/{shiftId}");
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{shiftId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        ShiftAssignmentExists(shiftId).Should().BeTrue();
+        ShiftExists(shiftId).Should().BeTrue();
     }
 
     [Fact]
     public async Task Delete_Unauthenticated_Returns401()
     {
         client_.DefaultRequestHeaders.Authorization = null;
-        HttpResponseMessage response = await client_.DeleteAsync($"/shiftassignment/{Guid.NewGuid()}");
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{Guid.NewGuid()}");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -641,7 +641,7 @@ public class TestShiftAssignmentController
     public async Task Delete_UnknownId_Returns404()
     {
         await AuthorizeAsAsync(ManagerEmail);
-        HttpResponseMessage response = await client_.DeleteAsync($"/shiftassignment/{Guid.NewGuid()}");
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{Guid.NewGuid()}");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

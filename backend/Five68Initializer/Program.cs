@@ -83,7 +83,7 @@ namespace Five68.Initializer
 			TimeOnly nightStart = new TimeOnly(22, 0);
 			TimeSpan nightDuration = TimeSpan.FromHours(4);
 
-			(Guid luigiThuAssignmentId, Guid annaTueAssignmentId, Guid marcoFriAssignmentId) = (
+			(Guid luigiThuShiftId, Guid annaTueShiftId, Guid marcoFriShiftId) = (
 				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
 			);
 
@@ -187,29 +187,29 @@ namespace Five68.Initializer
 
 			db.ClosedDays.AddRange(closedDays);
 
-			// --- 3. SHIFT ASSIGNMENTS ---
-			db.ShiftAssignments.AddRange([
+			// --- 3. SHIFTS ---
+			db.Shifts.AddRange([
 				// mar: luigi (completo) + anna (parziale)
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(tue), EmployeeId = luigiId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
-				new ShiftAssignment { Id = annaTueAssignmentId, Date = DateOnly.FromDateTime(tue), EmployeeId = annaId, StartTime = partialStart, Duration = partialDuration, CreatedBy = managerId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(tue), EmployeeId = luigiId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new Shift { Id = annaTueShiftId, Date = DateOnly.FromDateTime(tue), EmployeeId = annaId, StartTime = partialStart, Duration = partialDuration, CreatedBy = managerId },
 
 				// mer (oggi): luigi + anna + manager
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = luigiId,   StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = annaId,    StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = managerId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = luigiId,   StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = annaId,    StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = managerId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
 
 				// gio: luigi (ha richiesta di cambio pendente) + marco
-				new ShiftAssignment { Id = luigiThuAssignmentId, Date = DateOnly.FromDateTime(thu), EmployeeId = luigiId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(thu), EmployeeId = marcoId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new Shift { Id = luigiThuShiftId, Date = DateOnly.FromDateTime(thu), EmployeeId = luigiId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(thu), EmployeeId = marcoId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
 
 				// ven: manager + anna + marco (parziale)
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = managerId, StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = annaId,    StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
-				new ShiftAssignment { Id = marcoFriAssignmentId, Date = DateOnly.FromDateTime(fri), EmployeeId = marcoId, StartTime = partialStart, Duration = partialDuration, CreatedBy = adminId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = managerId, StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = annaId,    StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
+				new Shift { Id = marcoFriShiftId, Date = DateOnly.FromDateTime(fri), EmployeeId = marcoId, StartTime = partialStart, Duration = partialDuration, CreatedBy = adminId },
 
 				// sab: anna (completo) + marco (notturno, chiude alle 02:00 di domenica)
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(sat), EmployeeId = annaId, StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(sat), EmployeeId = marcoId, StartTime = nightStart, Duration = nightDuration, CreatedBy = adminId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(sat), EmployeeId = annaId, StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
+				new Shift { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(sat), EmployeeId = marcoId, StartTime = nightStart, Duration = nightDuration, CreatedBy = adminId },
 			]);
 
 			// --- 4. SWAP REQUESTS ---
@@ -217,21 +217,21 @@ namespace Five68.Initializer
 			db.SwapRequests.AddRange([
 				new SwapRequest { // luigi chiede ad anna di coprire il suo gio (pendente, luigi appare evidenziato)
 					Id = Guid.NewGuid(),
-					ShiftAssignmentId = luigiThuAssignmentId,
+					ShiftId = luigiThuShiftId,
 					RequesterId = luigiId,
 					TargetEmployeeId = annaId,
 					Status = SwapRequestStatus.Pending
 				},
 				new SwapRequest { // anna aveva chiesto a luigi di coprire il suo mar (parziale) → accettato
 					Id = Guid.NewGuid(),
-					ShiftAssignmentId = annaTueAssignmentId,
+					ShiftId = annaTueShiftId,
 					RequesterId = annaId,
 					TargetEmployeeId = luigiId,
 					Status = SwapRequestStatus.Accepted
 				},
 				new SwapRequest { // marco aveva chiesto a luigi di coprire il suo ven (parziale) → rifiutato
 					Id = Guid.NewGuid(),
-					ShiftAssignmentId = marcoFriAssignmentId,
+					ShiftId = marcoFriShiftId,
 					RequesterId = marcoId,
 					TargetEmployeeId = luigiId,
 					Status = SwapRequestStatus.Rejected
