@@ -13,8 +13,9 @@ namespace Five68.Models.DTO
 		[DataType(DataType.Time)]
 		public TimeOnly StartTime { get; set; }
 		[Required]
-		[DataType(DataType.Time)]
-		public TimeOnly EndTime { get; set; }
+		[DataType(DataType.Duration)]
+		[Range(typeof(TimeSpan), "00:00:00", "1.00:00:00", MinimumIsExclusive = true)]
+		public TimeSpan Duration { get; set; }
 	}
 
 	public class ShiftAssignmentUpdate
@@ -23,7 +24,8 @@ namespace Five68.Models.DTO
 		[DataType(DataType.Time)]
 		public TimeOnly StartTime { get; set; }
 		[Required]
-		[DataType(DataType.Time)]
-		public TimeOnly EndTime { get; set; }
+		[DataType(DataType.Duration)]
+		[Range(typeof(TimeSpan), "00:00:00", "1.00:00:00", MinimumIsExclusive = true)]
+		public TimeSpan Duration { get; set; }
 	}
 }

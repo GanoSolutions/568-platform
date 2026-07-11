@@ -73,11 +73,11 @@ namespace Five68.Initializer
 											  // sab 04/07 — nessun turno creato (giorno vuoto)
 			DateTime sun = today.AddDays(4);  // dom 05/07 — chiusura
 
-			// Orari standard: feriale 18:00-23:59 (fino a mezzanotte), turno ridotto 19:00-22:00
+			// Orari standard: feriale 18:00-00:00 (6h), turno ridotto 19:00-22:00 (3h)
 			TimeOnly fullStart = new TimeOnly(18, 0);
-			TimeOnly fullEnd = new TimeOnly(23, 59);
+			TimeSpan fullDuration = TimeSpan.FromHours(6);
 			TimeOnly partialStart = new TimeOnly(19, 0);
-			TimeOnly partialEnd = new TimeOnly(22, 0);
+			TimeSpan partialDuration = TimeSpan.FromHours(3);
 
 			(Guid luigiThuAssignmentId, Guid annaTueAssignmentId, Guid marcoFriAssignmentId) = (
 				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
@@ -186,22 +186,22 @@ namespace Five68.Initializer
 			// --- 3. SHIFT ASSIGNMENTS ---
 			db.ShiftAssignments.AddRange([
 				// mar: luigi (completo) + anna (parziale)
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(tue), EmployeeId = luigiId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
-				new ShiftAssignment { Id = annaTueAssignmentId, Date = DateOnly.FromDateTime(tue), EmployeeId = annaId, StartTime = partialStart, EndTime = partialEnd, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(tue), EmployeeId = luigiId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new ShiftAssignment { Id = annaTueAssignmentId, Date = DateOnly.FromDateTime(tue), EmployeeId = annaId, StartTime = partialStart, Duration = partialDuration, CreatedBy = managerId },
 
 				// mer (oggi): luigi + anna + manager
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = luigiId,   StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = annaId,    StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = managerId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = luigiId,   StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = annaId,    StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(wed), EmployeeId = managerId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
 
 				// gio: luigi (ha richiesta di cambio pendente) + marco
-				new ShiftAssignment { Id = luigiThuAssignmentId, Date = DateOnly.FromDateTime(thu), EmployeeId = luigiId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(thu), EmployeeId = marcoId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = managerId },
+				new ShiftAssignment { Id = luigiThuAssignmentId, Date = DateOnly.FromDateTime(thu), EmployeeId = luigiId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(thu), EmployeeId = marcoId, StartTime = fullStart, Duration = fullDuration, CreatedBy = managerId },
 
 				// ven: manager + anna + marco (parziale)
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = managerId, StartTime = fullStart, EndTime = fullEnd, CreatedBy = adminId },
-				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = annaId,    StartTime = fullStart, EndTime = fullEnd, CreatedBy = adminId },
-				new ShiftAssignment { Id = marcoFriAssignmentId, Date = DateOnly.FromDateTime(fri), EmployeeId = marcoId, StartTime = partialStart, EndTime = partialEnd, CreatedBy = adminId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = managerId, StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
+				new ShiftAssignment { Id = Guid.NewGuid(), Date = DateOnly.FromDateTime(fri), EmployeeId = annaId,    StartTime = fullStart, Duration = fullDuration, CreatedBy = adminId },
+				new ShiftAssignment { Id = marcoFriAssignmentId, Date = DateOnly.FromDateTime(fri), EmployeeId = marcoId, StartTime = partialStart, Duration = partialDuration, CreatedBy = adminId },
 			]);
 
 			// --- 4. SWAP REQUESTS ---

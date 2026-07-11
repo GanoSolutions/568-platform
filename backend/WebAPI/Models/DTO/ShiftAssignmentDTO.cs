@@ -6,7 +6,7 @@ namespace Five68.Models.DTO
 		public DateOnly Date { get; set; }
 		public Guid EmployeeId { get; set; }
 		public TimeOnly StartTime { get; set; }
-		public TimeOnly EndTime { get; set; }
+		public TimeSpan Duration { get; set; }
 		public Guid CreatedBy { get; set; }
 		public DateTimeOffset CreatedAt { get; set; }
 
@@ -20,7 +20,7 @@ namespace Five68.Models.DTO
 				Date = sa.Date,
 				EmployeeId = sa.EmployeeId,
 				StartTime = sa.StartTime,
-				EndTime = sa.EndTime,
+				Duration = sa.Duration,
 				CreatedBy = sa.CreatedBy,
 				CreatedAt = sa.CreatedAt,
 			};

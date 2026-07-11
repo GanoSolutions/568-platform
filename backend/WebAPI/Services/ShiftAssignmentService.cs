@@ -43,11 +43,6 @@ namespace Five68.Services
 		{
 			User requester = await RequireManagerOrAdmin(requesterId);
 
-			if (model.EndTime <= model.StartTime)
-			{
-				throw new EntityException("End time must be after start time");
-			}
-
 			Employee employee = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Employee not found");
 			if (await _shiftAssignmentFacade.IsClosedDayAsync(model.Date))
 			{
@@ -66,22 +61,17 @@ namespace Five68.Services
 				Date = model.Date,
 				EmployeeId = model.EmployeeId,
 				StartTime = model.StartTime,
-				EndTime = model.EndTime,
+				Duration = model.Duration,
 				CreatedBy = requesterId,
 			});
 
-			_logger.LogInformation($"User {requester.Email} created shift assignment for employee {model.EmployeeId} on {model.Date}");
+			_logger.LogInformation($"User {requester.Email} created a {created.Duration} hours shift on {created.Date} for employee {created.Employee.Name} {created.Employee.Surname} starting at {created.StartTime}");
 			return ShiftAssignmentDTO.FromShiftAssignment(created);
 		}
 
 		public async Task<ShiftAssignmentDTO> Update(Guid id, ShiftAssignmentUpdate model, Guid requesterId)
 		{
 			User requester = await RequireManagerOrAdmin(requesterId);
-
-			if (model.EndTime <= model.StartTime)
-			{
-				throw new EntityException("End time must be after start time");
-			}
 
 			ShiftAssignment sa = await _shiftAssignmentFacade.FindByIdAsync(id) ?? throw new NotFoundException("Shift assignment not found");
 			if (await _shiftAssignmentFacade.IsClosedDayAsync(sa.Date))
@@ -90,11 +80,11 @@ namespace Five68.Services
 			}
 
 			sa.StartTime = model.StartTime;
-			sa.EndTime = model.EndTime;
+			sa.Duration = model.Duration;
 
 			ShiftAssignment updated = await _shiftAssignmentFacade.UpdateAsync(sa);
 
-			_logger.LogInformation($"User {requester.Email} updated shift assignment to {model.StartTime} - {model.EndTime}");
+			_logger.LogInformation($"User {requester.Email} updated shift assignment on {updated.Date} to a {updated.Duration} hours shift starting at {updated.StartTime}");
 			return ShiftAssignmentDTO.FromShiftAssignment(updated);
 		}
 
@@ -105,7 +95,7 @@ namespace Five68.Services
 			ShiftAssignment sa = await _shiftAssignmentFacade.FindByIdAsync(id) ?? throw new NotFoundException("Shift assignment not found");
 			await _shiftAssignmentFacade.DeleteAsync(sa);
 
-			_logger.LogInformation($"User {requester.Email} deleted shift assignment on {sa.Date} at {sa.StartTime} - {sa.EndTime}");
+			_logger.LogInformation($"User {requester.Email} deleted shift assignment on {sa.Date} - {sa.StartTime}");
 		}
 
 		private async Task<User> RequireManagerOrAdmin(Guid requesterId)

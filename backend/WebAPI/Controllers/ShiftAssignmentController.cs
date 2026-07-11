@@ -57,12 +57,13 @@ namespace Five68.Controllers
 		/// <summary>
 		/// Creates a new shift assignment for an employee. Only managers/admins can perform this action.
 		/// </summary>
-		/// <param name="model">The employee, date and time range to assign.</param>
+		/// <param name="model">The employee, date, start time and duration to assign.</param>
 		/// <response code="201">Shift assignment created successfully.</response>
+		/// <response code="400">Duration is zero or exceeds 24 hours.</response>
 		/// <response code="401">Caller is not authenticated.</response>
 		/// <response code="403">Caller is not a manager or admin.</response>
 		/// <response code="404">Employee not found.</response>
-		/// <response code="422">End time is not after start time, the day is closed, or the employee is already assigned on that date.</response>
+		/// <response code="422">The day is closed, or the employee is already assigned on that date.</response>
 		[HttpPost("")]
 		public async Task<IActionResult> Create([FromBody] ShiftAssignmentCreate model)
 		{
@@ -75,15 +76,16 @@ namespace Five68.Controllers
 		}
 
 		/// <summary>
-		/// Updates the start/end time of an existing shift assignment. Only managers/admins can perform this action.
+		/// Updates the start time/duration of an existing shift assignment. Only managers/admins can perform this action.
 		/// </summary>
 		/// <param name="id">The ID of the shift assignment to update.</param>
-		/// <param name="model">The new time range.</param>
+		/// <param name="model">The new start time and duration.</param>
 		/// <response code="200">Shift assignment updated successfully.</response>
+		/// <response code="400">Duration is zero or exceeds 24 hours.</response>
 		/// <response code="401">Caller is not authenticated.</response>
 		/// <response code="403">Caller is not a manager or admin.</response>
 		/// <response code="404">Shift assignment not found.</response>
-		/// <response code="422">End time is not after start time, or the day is closed.</response>
+		/// <response code="422">The day is closed.</response>
 		[HttpPut("{id:guid}")]
 		public async Task<IActionResult> Update(Guid id, [FromBody] ShiftAssignmentUpdate model)
 		{
