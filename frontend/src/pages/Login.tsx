@@ -44,7 +44,7 @@ export default function Login() {
 				<img
 					src="/logo.png"
 					alt="Birreria 568 Garbatella"
-					className="w-24 h-24 mx-auto mb-4 rounded-full object-contain"
+					className="w-24 h-24 mx-auto mb-4 rounded-full object-cover"
 				/>
 				<h1 className="text-white text-2xl font-bold tracking-tight">Turni 568</h1>
 				<p className="text-slate-400 text-sm mt-1">Pianificazione settimanale</p>
