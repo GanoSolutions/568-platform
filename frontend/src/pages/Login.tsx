@@ -91,7 +91,7 @@ export default function Login() {
 					<p className="text-red-400 text-sm text-center bg-red-950/50 border border-red-900 rounded-lg py-2">{error}</p>
 				)}
 
-				<Button type="submit" disabled={submitting} className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20 disabled:opacity-70">
+				<Button type="submit" disabled={submitting} className="w-full mt-2 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20 disabled:opacity-70">
 					{submitting ? 'Accesso in corso...' : 'Accedi'}
 				</Button>
 			</form>
