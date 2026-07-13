@@ -1,12 +1,38 @@
 import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Check, Eye, EyeOff, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { userApi } from '@/lib/apiClient';
+import { ApiError, userApi } from '@/lib/apiClient';
 
 interface ChangePasswordModalProps {
 	onClose: () => void
 	onSuccess: () => void
+}
+
+// Rispecchia AppSettings:PasswordRequirements sul backend (vedi appsettings.Development.json).
+const PASSWORD_REQUIREMENTS: { label: string, test: (password: string) => boolean }[] = [
+	{ label: 'Almeno 8 caratteri', test: p => p.length >= 8 },
+	{ label: 'Massimo 128 caratteri', test: p => p.length <= 128 },
+	{ label: 'Una lettera maiuscola', test: p => /[A-Z]/.test(p) },
+	{ label: 'Una lettera minuscola', test: p => /[a-z]/.test(p) },
+	{ label: 'Un numero', test: p => /[0-9]/.test(p) },
+	{ label: 'Un carattere speciale', test: p => /[^A-Za-z0-9]/.test(p) },
+];
+
+function PasswordChecklist({ password }: { password: string }) {
+	return (
+		<ul className="space-y-1 mt-2">
+			{PASSWORD_REQUIREMENTS.map(({ label, test }) => {
+				const met = test(password);
+				return (
+					<li key={label} className={`flex items-center gap-1.5 text-xs ${met ? 'text-emerald-600' : 'text-slate-400'}`}>
+						{met ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+						{label}
+					</li>
+				);
+			})}
+		</ul>
+	);
 }
 
 function PasswordField({
@@ -54,7 +80,9 @@ export default function ChangePasswordModal({ onClose, onSuccess }: ChangePasswo
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState('');
 
-	const canSubmit = currentPassword.length > 0 && newPassword.length >= 8 && newPassword === confirmPassword;
+	const newPasswordValid = PASSWORD_REQUIREMENTS.every(({ test }) => test(newPassword));
+	const passwordsMatch = newPassword === confirmPassword;
+	const canSubmit = currentPassword.length > 0 && newPasswordValid && passwordsMatch;
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -65,10 +93,8 @@ export default function ChangePasswordModal({ onClose, onSuccess }: ChangePasswo
 		try {
 			await userApi.changePassword({ currentPassword, newPassword });
 			onSuccess();
-		} catch {
-			// Il backend non espone quale requisito manca o se è la password attuale
-			// ad essere errata: mostriamo un messaggio generico che copre entrambi i casi.
-			setError('Password attuale errata oppure la nuova password non rispetta i requisiti richiesti (minimo 8 caratteri, con almeno una maiuscola, una minuscola, un numero e un carattere speciale).');
+		} catch (err) {
+			setError(err instanceof ApiError ? err.message : 'Impossibile completare la richiesta. Riprova.');
 		} finally {
 			setSubmitting(false);
 		}
@@ -89,18 +115,26 @@ export default function ChangePasswordModal({ onClose, onSuccess }: ChangePasswo
 							onChange={setCurrentPassword}
 							autoComplete="current-password"
 						/>
-						<PasswordField
-							label="Nuova password"
-							value={newPassword}
-							onChange={setNewPassword}
-							autoComplete="new-password"
-						/>
-						<PasswordField
-							label="Conferma nuova password"
-							value={confirmPassword}
-							onChange={setConfirmPassword}
-							autoComplete="new-password"
-						/>
+						<div>
+							<PasswordField
+								label="Nuova password"
+								value={newPassword}
+								onChange={setNewPassword}
+								autoComplete="new-password"
+							/>
+							{newPassword.length > 0 && <PasswordChecklist password={newPassword} />}
+						</div>
+						<div>
+							<PasswordField
+								label="Conferma nuova password"
+								value={confirmPassword}
+								onChange={setConfirmPassword}
+								autoComplete="new-password"
+							/>
+							{confirmPassword.length > 0 && !passwordsMatch && (
+								<p className="text-xs text-red-600 mt-1.5">Le password non coincidono</p>
+							)}
+						</div>
 
 						{error && (
 							<div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-700">
