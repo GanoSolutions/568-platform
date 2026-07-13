@@ -64,7 +64,7 @@ function ScreenLoader() {
 				<img
 					src="/logo.png"
 					alt="Birreria 568 Garbatella"
-					className="w-20 h-20 rounded-full object-contain animate-pulse"
+					className="w-20 h-20 rounded-full object-contain bg-white p-1.5 animate-pulse"
 				/>
 				<div className="w-8 h-8 rounded-full border-2 border-slate-700 border-t-indigo-500 animate-spin mt-6" />
 				<p className="text-slate-400 text-sm mt-4">Caricamento...</p>
