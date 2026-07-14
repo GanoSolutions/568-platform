@@ -151,7 +151,7 @@ export default function Employees() {
 
 						{/* Dettagli */}
 						<div className="bg-slate-50 rounded-xl px-3 py-2.5 space-y-1.5 mb-3">
-							<Detail icon="phone" label={emp.phone} />
+							{emp.phone && <Detail icon="phone" label={emp.phone} />}
 							{emp.contractEnd && (
 								<Detail icon="calendar" label={`Fine contratto: ${formatDate(emp.contractEnd)}`} warn />
 							)}

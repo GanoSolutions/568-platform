@@ -4,10 +4,10 @@ namespace Five68.Models.DTO
     {
         public Guid Id { get; set; }
         public string Email { get; set; }
-        public string FullName { get; set; }
         public UserRole Role { get; set; }
         public UserStatus Status { get; set; }
-        public string? Color { get; set; }
+        public EmployeeDTO? Employee { get; set; }
+
         public DateTimeOffset CreatedAt { get; set; }
 
         public static UserDTO FromUser(User user)
@@ -21,11 +21,10 @@ namespace Five68.Models.DTO
             {
                 Id = user.Id,
                 Email = user.Email,
-                FullName = user.FullName,
                 Role = user.Role,
                 Status = user.Status,
-                Color = user.Color,
-                CreatedAt = user.CreatedAt
+                CreatedAt = user.CreatedAt,
+                Employee = EmployeeDTO.FromEmployee(user.Employee)
             };
         }
     }

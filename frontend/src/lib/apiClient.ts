@@ -24,21 +24,46 @@ export interface JwtPayload {
 /** Numeric values match the C# UserRole enum: Admin=0, Manager=1, Employee=2 */
 export type UserRoleCode = 0 | 1 | 2;
 
-/** Numeric values match the C# UserStatus enum: Pending=0, Active=1, Disabled=2 */
-export type UserStatusCode = 0 | 1 | 2;
+/** Numeric values match the C# UserStatus enum: Pending=0, Invited=1, Active=2, Disabled=3 */
+export type UserStatusCode = 0 | 1 | 2 | 3;
+
+/**
+ * Mirror of the C# UserStatus enum (serialized as numbers).
+ * - Pending:  creato, invito non ancora inviato
+ * - Invited:  invito inviato, primo accesso non completato
+ * - Active:   primo accesso completato
+ * - Disabled: account disabilitato
+ */
+export const UserStatus = {
+	Pending: 0,
+	Invited: 1,
+	Active: 2,
+	Disabled: 3,
+} as const;
 
 export interface Tokens {
 	accessToken: string;
 	refreshToken: string;
 }
 
+/** Mirror of the C# EmployeeDTO — dati anagrafici del dipendente. */
+export interface EmployeeDTO {
+	name: string;
+	surname: string;
+	fiscalCode: string;
+	phone: string;
+	color: string | null;
+	/** DateOnly serializzato come "YYYY-MM-DD", null se a tempo indeterminato */
+	contractEnd: string | null;
+}
+
 export interface UserDTO {
 	id: string;
 	email: string;
-	fullName: string;
 	role: UserRoleCode;
 	status: UserStatusCode;
-	color: string | null;
+	/** Presente solo dopo che l'utente ha accettato l'invito, altrimenti null */
+	employee: EmployeeDTO | null;
 	createdAt: string;
 }
 

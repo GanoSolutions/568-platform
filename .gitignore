@@ -327,3 +327,4 @@ backend/WebAPI/appsettings*.json
 
 backend/WebAPI/wwwroot/*
 dotnet
+.claude
