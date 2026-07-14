@@ -69,7 +69,6 @@ public class TestUserUtils
 		{
 			Id = Guid.NewGuid(),
 			Email = "test@five68.com",
-			FullName = "Test",
 			Role = UserRole.Employee,
 			PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4)
 		};
@@ -84,7 +83,6 @@ public class TestUserUtils
 		{
 			Id = Guid.NewGuid(),
 			Email = "test@five68.com",
-			FullName = "Test",
 			Role = UserRole.Employee,
 			PasswordHash = BCrypt.Net.BCrypt.HashPassword("Correct@1!", workFactor: 4)
 		};
@@ -99,7 +97,6 @@ public class TestUserUtils
 		{
 			Id = Guid.NewGuid(),
 			Email = "test@five68.com",
-			FullName = "Test",
 			Role = UserRole.Employee,
 			PasswordHash = null  // utente Pending, non ha ancora settato la password
 		};

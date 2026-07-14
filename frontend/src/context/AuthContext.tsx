@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AppUser } from '@/types';
-import { authApi, userApi, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
+import { authApi, userApi, UserStatus, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
 
 interface AuthContextValue {
 	user: AppUser | null
@@ -20,18 +20,21 @@ export { getUserIdFromToken };
 
 /**
  * Maps a backend UserDTO to the frontend AppUser shape.
+ * - Name/color come from the nested `employee` (null until the invite is accepted);
+ *   name falls back to the email when there is no employee record yet.
  * - Role: Admin=0, Manager=1 → 'admin'; Employee=2 → 'employee'
- * - firstLoginCompleted: Pending=0 means invite not yet accepted
+ * - firstLoginCompleted: Active(2) or Disabled(3) mean the first login is done
  * - telegramLinked: not yet exposed in UserDTO, defaults to false
  */
 export function mapUserDTO(dto: UserDTO): AppUser {
+	const emp = dto.employee;
 	return {
 		id: dto.id,
-		name: dto.fullName,
+		name: emp ? `${emp.name} ${emp.surname}`.trim() : dto.email,
 		email: dto.email,
 		role: dto.role <= 1 ? 'admin' : 'employee',
-		color: dto.color ?? '#6366f1',
-		firstLoginCompleted: dto.status !== 0,
+		color: emp?.color ?? '#6366f1',
+		firstLoginCompleted: dto.status >= UserStatus.Active,
 		telegramLinked: false,
 	};
 }

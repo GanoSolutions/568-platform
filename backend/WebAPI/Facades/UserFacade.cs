@@ -33,12 +33,16 @@ namespace Five68.Facades
 
 		internal async Task<User> FindByIdAsync(Guid id)
 		{
-			return await context_.Users.FindAsync(id);
+			return await context_.Users
+				.Include(x => x.Employee)
+				.FirstOrDefaultAsync(x => x.Id == id);
 		}
 
 		internal async Task<IEnumerable<User>> GetAll()
 		{
-			return await context_.Users.ToListAsync();
+			return await context_.Users
+				.Include(x => x.Employee)
+				.ToListAsync();
 		}
 
 		internal async Task<User> FindByInviteTokenAsync(string token)

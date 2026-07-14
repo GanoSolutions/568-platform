@@ -13,8 +13,8 @@ namespace Five68
 
 		public DbSet<User> Users => Set<User>();
 		public DbSet<Employee> Employees => Set<Employee>();
+		public DbSet<ClosedDay> ClosedDays => Set<ClosedDay>();
 		public DbSet<Shift> Shifts => Set<Shift>();
-		public DbSet<ShiftAssignment> ShiftAssignments => Set<ShiftAssignment>();
 		public DbSet<SwapRequest> SwapRequests => Set<SwapRequest>();
 		public DbSet<UserRefreshTokens> RefreshTokens => Set<UserRefreshTokens>();
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -43,12 +43,12 @@ namespace Five68
 				e.HasIndex(x => x.FiscalCode).IsUnique();
 			});
 
-			modelBuilder.Entity<Shift>(e =>
+			modelBuilder.Entity<ClosedDay>(e =>
 			{
-				e.ToTable("t_shifts");
+				e.ToTable("t_closed_days");
 				e.HasKey(x => x.Id);
 				e.Property(x => x.Id).ValueGeneratedNever();
-				e.HasIndex(x => x.WorkDate).IsUnique();
+				e.HasIndex(x => x.Date).IsUnique();
 
 				e.HasOne(x => x.Creator)
 					.WithMany()
@@ -56,17 +56,17 @@ namespace Five68
 					.OnDelete(DeleteBehavior.SetNull);
 			});
 
-			modelBuilder.Entity<ShiftAssignment>(e =>
+			modelBuilder.Entity<Shift>(e =>
 			{
-				e.ToTable("t_shift_assignments");
+				e.ToTable("t_shifts");
 				e.HasKey(x => x.Id);
 				e.Property(x => x.Id).ValueGeneratedNever();
-				e.HasIndex(x => new { x.ShiftId, x.EmployeeId }).IsUnique();
+				e.HasIndex(x => new { x.Date, x.EmployeeId }).IsUnique();
 
-				e.HasOne(x => x.Shift)
-					.WithMany(x => x.Assignments)
-					.HasForeignKey(x => x.ShiftId)
-					.OnDelete(DeleteBehavior.Cascade);
+				e.HasOne(x => x.Creator)
+					.WithMany()
+					.HasForeignKey(x => x.CreatedBy)
+					.OnDelete(DeleteBehavior.SetNull);
 
 				e.HasOne(x => x.Employee)
 					.WithMany()
@@ -82,7 +82,7 @@ namespace Five68
 				e.Property(x => x.Status).HasConversion<string>();
 
 				e.HasOne(x => x.Shift)
-					.WithMany(x => x.SwapRequests)
+					.WithMany()
 					.HasForeignKey(x => x.ShiftId)
 					.OnDelete(DeleteBehavior.Cascade);
 

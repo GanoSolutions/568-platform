@@ -20,7 +20,7 @@ export default function Layout() {
 					<img
 						src="/logo.png"
 						alt="568"
-						className="w-8 h-8 rounded-full object-contain bg-white p-0.5"
+						className="w-8 h-8 rounded-full object-cover"
 					/>
 					<span className="font-bold text-base">Turni 568</span>
 				</div>

@@ -2,12 +2,8 @@ import { useState } from 'react';
 import { useEmployees } from '@/hooks/useEmployees';
 import EmployeeSheet from '@/components/employees/EmployeeSheet';
 import DeleteConfirmDialog from '@/components/employees/DeleteConfirmDialog';
-import { getAvatarTextColor } from '@/lib/colorUtils';
+import { Spinner } from '@/components/ui/spinner';
 import type { EmployeeDetail } from '@/types';
-
-function Spinner() {
-	return <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />;
-}
 
 export default function Employees() {
 	const { employees, loading, error, addEmployee, updateEmployee, deleteEmployee, sendInvite, copyInviteLink } = useEmployees();
@@ -155,7 +151,7 @@ export default function Employees() {
 
 						{/* Dettagli */}
 						<div className="bg-slate-50 rounded-xl px-3 py-2.5 space-y-1.5 mb-3">
-							<Detail icon="phone" label={emp.phone} />
+							{emp.phone && <Detail icon="phone" label={emp.phone} />}
 							{emp.contractEnd && (
 								<Detail icon="calendar" label={`Fine contratto: ${formatDate(emp.contractEnd)}`} warn />
 							)}
@@ -172,7 +168,7 @@ export default function Employees() {
 									{inviteSent === emp.id ? (
 										<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg> Inviato!</>
 									) : inviting === emp.id ? (
-										<><Spinner /> Invio...</>
+										<><Spinner className="w-3.5 h-3.5" /> Invio...</>
 									) : (
 										<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> Invia invito</>
 									)}
@@ -186,7 +182,7 @@ export default function Employees() {
 								{copied === emp.id ? (
 									<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg> Copiato!</>
 								) : copying === emp.id ? (
-									<><Spinner /> Genero...</>
+									<><Spinner className="w-3.5 h-3.5" /> Genero...</>
 								) : (
 									<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg> Copia link</>
 								)}

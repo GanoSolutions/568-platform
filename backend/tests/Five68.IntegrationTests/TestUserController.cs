@@ -45,7 +45,6 @@ public class TestUserController
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4),
-            FullName = "Test User",
             Role = role,
             Status = UserStatus.Active,
         });
@@ -116,7 +115,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = "new.manager@five68.com",
-            FullName = "New Manager",
             Password = Password,
             Role = UserRole.Manager,
         });
@@ -131,7 +129,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = "new.employee@five68.com",
-            FullName = "New Employee",
             Password = Password,
             Role = UserRole.Employee,
         });
@@ -146,7 +143,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = "another.employee@five68.com",
-            FullName = "Another Employee",
             Password = Password,
             Role = UserRole.Employee,
         });
@@ -161,7 +157,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = "another.admin@five68.com",
-            FullName = "Another Admin",
             Password = Password,
             Role = UserRole.Admin,
         });
@@ -176,7 +171,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = "another.manager2@five68.com",
-            FullName = "Another Manager",
             Password = Password,
             Role = UserRole.Manager,
         });
@@ -191,7 +185,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = "yet.another@five68.com",
-            FullName = "Yet Another",
             Password = Password,
             Role = UserRole.Employee,
         });
@@ -206,7 +199,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = EmployeeEmail,
-            FullName = "Duplicate",
             Password = Password,
             Role = UserRole.Employee,
         });
@@ -221,7 +213,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
         {
             Email = "noauth@five68.com",
-            FullName = "No Auth",
             Password = Password,
             Role = UserRole.Employee,
         });
@@ -235,7 +226,6 @@ public class TestUserController
         await AuthorizeAsAsync(AdminEmail);
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new
         {
-            FullName = "No Email",
             Password = Password,
             Role = UserRole.Employee,
         });
@@ -250,7 +240,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new
         {
             Email = "nopassword@five68.com",
-            FullName = "No Password",
             Role = UserRole.Employee,
         });
 
@@ -322,11 +311,15 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_ValidToken_Returns200()
     {
-        string token = await GenerateInviteForAsync(EmployeeEmail);
+        (_, string token) = await CreateInvitedUserAsync("accept-returns200@five68.com");
 
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501Z",
+            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -336,12 +329,15 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_ValidToken_SetsStatusToActive()
     {
-        string token = await GenerateInviteForAsync(EmployeeEmail);
-        Guid id = GetUserId(EmployeeEmail);
+        (Guid id, string token) = await CreateInvitedUserAsync("accept-setsactive@five68.com");
 
         await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501Y",
+            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -353,12 +349,15 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_ValidToken_ClearsInviteToken()
     {
-        string token = await GenerateInviteForAsync(EmployeeEmail);
-        Guid id = GetUserId(EmployeeEmail);
+        (Guid id, string token) = await CreateInvitedUserAsync("accept-clearstoken@five68.com");
 
         await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501X",
+            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -375,6 +374,10 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = "not-a-valid-token",
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501W",
+            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -398,6 +401,10 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501W",
+            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -407,17 +414,25 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_TokenUsedTwice_Returns401()
     {
-        string token = await GenerateInviteForAsync(EmployeeEmail);
+        (_, string token) = await CreateInvitedUserAsync("accept-usedtwice@five68.com");
 
         await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501V",
+            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
         HttpResponseMessage replayResponse = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501V",
+            Phone = "3331234567",
             Password = "AnotherP@ss1!"
         });
 
@@ -455,6 +470,24 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
         Dictionary<string, string>? body = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
         return body!["inviteToken"];
+    }
+
+    // Ogni test che completa davvero l'accept-invite crea il proprio Employee (PK = UserId,
+    // FiscalCode unique) — serve un utente nuovo e dedicato per test, non EmployeeEmail
+    // condiviso, altrimenti il secondo accept-invite nella stessa collection fallisce
+    // per chiave duplicata.
+    private async Task<(Guid id, string token)> CreateInvitedUserAsync(string email)
+    {
+        await AuthorizeAsAsync(AdminEmail);
+        await client_.PostAsJsonAsync("/user/signup", new UserRegister
+        {
+            Email = email,
+            Password = Password,
+            Role = UserRole.Employee,
+        });
+
+        string token = await GenerateInviteForAsync(email);
+        return (GetUserId(email), token);
     }
 
     private async Task AuthorizeAsAsync(string email)

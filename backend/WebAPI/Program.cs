@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Reflection;
+using System.Text.Json.Nodes;
 
 
 namespace Five68
@@ -60,6 +61,20 @@ namespace Five68
 				});
 				String xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
 				c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
+
+				// produce a correct example in swagger
+				c.MapType<TimeOnly>(() => new OpenApiSchema
+				{
+					Type = JsonSchemaType.String,
+					Format = "time",
+					Example = JsonValue.Create("13:45:00"),
+				});
+				c.MapType<TimeSpan>(() => new OpenApiSchema
+				{
+					Type = JsonSchemaType.String,
+					Example = JsonValue.Create("08:00:00"),
+					Description = "Duration in [d.]hh:mm:ss format (e.g. \"08:00:00\" for 8 hours, \"1.00:00:00\" for 24 hours).",
+				});
 			});
 
 			// Configure the HTTP request pipeline
@@ -142,12 +157,15 @@ namespace Five68
 			// Facades
 			services.AddScoped<RefreshTokenFacade>();
 			services.AddScoped<UserFacade>();
+			services.AddScoped<EmployeeFacade>();
+			services.AddScoped<ShiftFacade>();
 
 			// Services
 			services.AddScoped<AuthService>();
 			services.AddSingleton<JwtService>();
 			services.AddScoped<UserService>();
 			services.AddScoped<IEmailService, NoOpEmailService>();
+			services.AddScoped<ShiftService>();
 
 			// Utils
 			services.AddSingleton<UserUtils>();

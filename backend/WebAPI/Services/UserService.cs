@@ -11,13 +11,15 @@ namespace Five68.Services
 	public class UserService
 	{
 		private readonly UserFacade userFacade_;
+		private readonly EmployeeFacade employeeFacade_;
 		private readonly UserUtils userUtils_;
 		private readonly IEmailService emailService_;
 		private ILogger logger_;
 
-		public UserService(UserFacade userFacade, UserUtils userUtils, IEmailService emailService, ILogger<UserService> logger)
+		public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, IEmailService emailService, ILogger<UserService> logger)
 		{
 			userFacade_ = userFacade;
+			employeeFacade_ = employeeFacade;
 			userUtils_ = userUtils;
 			emailService_ = emailService;
 			logger_ = logger;
@@ -89,11 +91,21 @@ namespace Five68.Services
 			if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
 				throw new UnauthorizedException("Invalid or expired invite token");
 
+			await employeeFacade_.CreateAsync(new Employee
+			{
+				UserId = user.Id,
+				Name = model.Name,
+				Surname = model.Surname,
+				FiscalCode = model.FiscalCode,
+				Phone = model.Phone,
+			});
+
 			user.PasswordHash = userUtils_.HashAndCheckPassword(model.Password);
 			user.Status = UserStatus.Active;
 			user.InviteToken = null;
 			user.InviteTokenExpiry = null;
 			logger_.LogInformation($"User {user.Email} accepted invite");
+		
 			await userFacade_.UpdateAsync(user);
 		}
 
@@ -122,7 +134,6 @@ namespace Five68.Services
 				Id = Guid.NewGuid(),
 				Email = model.Email,
 				PasswordHash = userUtils_.HashAndCheckPassword(model.Password),
-				FullName = model.FullName,
 				Role = model.Role,
 				Status = UserStatus.Disabled,
 			});

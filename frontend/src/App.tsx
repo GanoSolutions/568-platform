@@ -62,8 +62,13 @@ function AppRoutes() {
 function ScreenLoader() {
 	return (
 		<div className="min-h-screen bg-slate-900 flex items-center justify-center px-6">
-			<div className="text-center">
-				<div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-indigo-500 animate-spin mx-auto" />
+			<div className="flex flex-col items-center text-center">
+				<img
+					src="/logo.png"
+					alt="Birreria 568 Garbatella"
+					className="w-20 h-20 rounded-full object-cover animate-pulse"
+				/>
+				<div className="w-8 h-8 rounded-full border-2 border-slate-700 border-t-indigo-500 animate-spin mt-6" />
 				<p className="text-slate-400 text-sm mt-4">Caricamento...</p>
 			</div>
 		</div>
