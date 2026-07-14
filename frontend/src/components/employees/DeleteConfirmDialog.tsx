@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import type { EmployeeDetail } from '@/types';
 
 interface DeleteConfirmDialogProps {
@@ -28,7 +29,7 @@ export default function DeleteConfirmDialog({ employee, deleting, onConfirm, onC
 					<Button variant="outline" onClick={onClose} disabled={deleting} className="flex-1 rounded-xl py-3 text-sm">Annulla</Button>
 					<Button onClick={onConfirm} disabled={deleting} className="flex-1 rounded-xl py-3 text-sm bg-red-500 hover:bg-red-400 text-white flex items-center justify-center gap-2">
 						{deleting ? (
-							<><span className="inline-block w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> Eliminazione...</>
+							<><Spinner /> Eliminazione...</>
 						) : 'Elimina'}
 					</Button>
 				</DialogFooter>
