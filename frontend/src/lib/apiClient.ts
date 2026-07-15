@@ -358,14 +358,3 @@ export const shiftApi = {
 
 	del: (id: string) => api.del<void>(`/shift/${id}`),
 };
-
-export const shiftApi = {
-	getByDateRange: (startDate: string, endDate: string) =>
-		api.get<ShiftDTO[]>(`/shift?startDate=${startDate}&endDate=${endDate}`),
-
-	create: (payload: ShiftCreatePayload) => api.post<ShiftDTO>('/shift', payload),
-
-	update: (id: string, payload: ShiftUpdatePayload) => api.put<ShiftDTO>(`/shift/${id}`, payload),
-
-	del: (id: string) => api.del<void>(`/shift/${id}`),
-};
