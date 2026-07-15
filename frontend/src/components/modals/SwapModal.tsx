@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { formatTimeLabel } from '@/lib/shiftTime';
 import type { AppUser, Employee, ShiftData } from '@/types';
 
 const DAYS_FULL = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
@@ -46,9 +47,9 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 		try {
 			await onSubmit({
 				date,
-				shiftId: shift?.id,
+				shiftId: myShift?.shiftId,
 				targetEmployeeIds: [...selectedColleagues],
-				shiftType: myShift?.partial ? 'Parziale' : 'Completo',
+				shiftType: myShift ? formatTimeLabel(myShift.startTime, myShift.endTime, myShift.overnight) : '',
 				formattedDate,
 			});
 			setSent(true);
@@ -89,7 +90,9 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 							</div>
 							<div className="flex justify-between text-sm">
 								<span className="text-slate-400">Turno</span>
-								<span className="font-semibold text-slate-800">{myShift?.partial ? 'Parziale' : 'Completo'}</span>
+								<span className="font-semibold text-slate-800">
+									{myShift ? formatTimeLabel(myShift.startTime, myShift.endTime, myShift.overnight) : ''}
+								</span>
 							</div>
 						</div>
 

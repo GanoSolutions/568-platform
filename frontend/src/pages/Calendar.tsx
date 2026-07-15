@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useCalendar, getWeekNumber } from '@/hooks/useCalendar';
+import { useEmployees } from '@/hooks/useEmployees';
 import DayRow from '@/components/calendar/DayRow';
 import CopyWeekModal from '@/components/modals/CopyWeekModal';
 import ShiftModal from '@/components/modals/ShiftModal';
 import SwapModal from '@/components/modals/SwapModal';
-import type { ShiftData } from '@/types';
 
 const MONTHS = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
 	'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
@@ -22,10 +22,13 @@ export default function Calendar() {
 		getShiftForDay,
 		saveShift,
 		copyWeek,
-		employees,
-		loading,
-		error,
-	} = useCalendar(user);
+		loading: calendarLoading,
+		error: calendarError,
+	} = useCalendar();
+	const { employees: allEmployees, loading: employeesLoading, error: employeesError } = useEmployees();
+	// I turni si assegnano a manager/dipendenti, non ad account admin puri.
+	const employees = allEmployees.filter(e => e.role !== 'admin');
+	const loading = calendarLoading || employeesLoading;
 	const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 	const [copyWeekOpen, setCopyWeekOpen] = useState(false);
 	const [actionError, setActionError] = useState('');
@@ -36,10 +39,10 @@ export default function Calendar() {
 
 	const selectedShift = selectedDay ? getShiftForDay(selectedDay) : null;
 
-	const handleSaveShift = async (data: ShiftData) => {
+	const handleSaveShift = async (entries: { employeeId: string; startTime: string; endTime: string }[]) => {
 		setActionError('');
 		try {
-			await saveShift(selectedDay!, data);
+			await saveShift(selectedDay!, entries);
 			setSelectedDay(null);
 		} catch (saveError) {
 			setActionError((saveError as Error).message || 'Salvataggio turno non riuscito');
@@ -109,9 +112,9 @@ export default function Calendar() {
 				</div>
 			)}
 
-			{(error || actionError) && (
+			{(calendarError || employeesError || actionError) && (
 				<div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{actionError || error}
+					{actionError || calendarError || employeesError}
 				</div>
 			)}
 
@@ -132,7 +135,7 @@ export default function Calendar() {
 						employees={employees}
 						onPress={() => setSelectedDay(day)}
 						currentUser={user}
-						hasPendingRequest={pendingShiftIds.has(getShiftForDay(day)?.id ?? '')}
+						hasPendingRequest={(getShiftForDay(day)?.employees ?? []).some(e => pendingShiftIds.has(e.shiftId))}
 					/>
 				))}
 			</div>

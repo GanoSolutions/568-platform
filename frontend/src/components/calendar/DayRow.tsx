@@ -1,4 +1,5 @@
 import EmployeeBadge from './EmployeeBadge';
+import { formatTimeLabel } from '@/lib/shiftTime';
 import type { AppUser, Employee, ShiftData } from '@/types';
 
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
@@ -74,7 +75,7 @@ export default function DayRow({ date, shift, employees, onPress, currentUser, h
 								key={shiftEmp.id}
 								name={emp.name}
 								color={emp.color}
-								partial={shiftEmp.partial}
+								timeLabel={formatTimeLabel(shiftEmp.startTime, shiftEmp.endTime, shiftEmp.overnight)}
 								isCurrentUser={emp.id === currentUser?.id}
 							/>
 						);

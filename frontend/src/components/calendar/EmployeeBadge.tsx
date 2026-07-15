@@ -1,7 +1,7 @@
 interface EmployeeBadgeProps {
   name: string
   color: string
-  partial: boolean
+  timeLabel: string
   isCurrentUser: boolean
 }
 
@@ -18,7 +18,7 @@ function getTextColor(hex: string): string {
 	return L > 0.179 ? '#1e293b' : '#ffffff';
 }
 
-export default function EmployeeBadge({ name, color, partial, isCurrentUser }: EmployeeBadgeProps) {
+export default function EmployeeBadge({ name, color, timeLabel, isCurrentUser }: EmployeeBadgeProps) {
 	const textColor = getTextColor(color);
 	return (
 		<span
@@ -28,7 +28,7 @@ export default function EmployeeBadge({ name, color, partial, isCurrentUser }: E
 			style={{ backgroundColor: color, color: textColor }}
 		>
 			{name}
-			{partial && <span className="font-bold opacity-90">½</span>}
+			<span className="font-normal opacity-90">{timeLabel}</span>
 		</span>
 	);
 }

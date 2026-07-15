@@ -74,6 +74,30 @@ export interface UserRegisterPayload {
 	role: UserRoleCode;
 }
 
+/** Mirror of the C# ShiftDTO. `startTime` is "HH:mm:ss", `duration` is a .NET
+ * TimeSpan string "[d.]hh:mm:ss" (e.g. "06:00:00", or "1.00:00:00" for 24h). */
+export interface ShiftDTO {
+	id: string;
+	date: string;
+	employeeId: string;
+	startTime: string;
+	duration: string;
+	createdBy: string;
+	createdAt: string;
+}
+
+export interface ShiftCreatePayload {
+	employeeId: string;
+	date: string;
+	startTime: string;
+	duration: string;
+}
+
+export interface ShiftUpdatePayload {
+	startTime: string;
+	duration: string;
+}
+
 // ---------------------------------------------------------------------------
 // Token storage
 // ---------------------------------------------------------------------------
@@ -304,4 +328,15 @@ export const userApi = {
 
 	acceptInvite: (token: string, password: string) =>
 		api.post<void>('/user/invite/accept', { token, password }),
+};
+
+export const shiftApi = {
+	getByDateRange: (startDate: string, endDate: string) =>
+		api.get<ShiftDTO[]>(`/shift?startDate=${startDate}&endDate=${endDate}`),
+
+	create: (payload: ShiftCreatePayload) => api.post<ShiftDTO>('/shift', payload),
+
+	update: (id: string, payload: ShiftUpdatePayload) => api.put<ShiftDTO>(`/shift/${id}`, payload),
+
+	del: (id: string) => api.del<void>(`/shift/${id}`),
 };
