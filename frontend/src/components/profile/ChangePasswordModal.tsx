@@ -143,7 +143,7 @@ export default function ChangePasswordModal({ onClose, onSuccess }: ChangePasswo
 						)}
 					</div>
 
-					<DialogFooter className="px-5 pb-5 flex gap-2">
+					<DialogFooter className="px-5 pb-5 flex gap-2 border-t-0 bg-transparent mx-0 mb-0">
 						<Button type="button" variant="outline" onClick={onClose} disabled={submitting} className="flex-1 rounded-xl py-3 text-sm">
 							Annulla
 						</Button>
