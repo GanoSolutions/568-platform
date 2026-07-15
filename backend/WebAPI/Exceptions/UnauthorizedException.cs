@@ -6,6 +6,6 @@ namespace Five68.Exceptions
 		{
 		}
 
-		public UnauthorizedException() : base() { }
+		public UnauthorizedException() : base("Non sei autorizzato a eseguire questa azione") { }
 	}
 }

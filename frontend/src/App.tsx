@@ -5,6 +5,7 @@ import Login from '@/pages/Login';
 import Calendar from '@/pages/Calendar';
 import Employees from '@/pages/Employees';
 import Requests from '@/pages/Requests';
+import Profile from '@/pages/Profile';
 import Layout from '@/components/Layout';
 import SetPassword from '@/pages/SetPassword';
 import type { ReactNode } from 'react';
@@ -50,6 +51,7 @@ function AppRoutes() {
 				<Route index element={<Navigate to="/calendar" replace />} />
 				<Route path="calendar" element={<Calendar />} />
 				<Route path="requests" element={<Requests />} />
+				<Route path="profile" element={<Profile />} />
 				<Route path="employees" element={<AdminRoute><Employees /></AdminRoute>} />
 			</Route>
 			<Route path="*" element={<Navigate to="/calendar" replace />} />

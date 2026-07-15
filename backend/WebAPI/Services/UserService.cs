@@ -66,12 +66,12 @@ namespace Five68.Services
 			}
 			if (requester.Role >= UserRole.Employee)
 			{
-				throw new ForbiddenException("You can't perform this action");
+				throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
 			}
 
 			User user = await userFacade_.FindByIdAsync(userId);
 			if (user is null)
-				throw new NotFoundException("User not found");
+				throw new NotFoundException("Utente non trovato");
 
 			string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
@@ -89,7 +89,7 @@ namespace Five68.Services
 		{
 			User user = await userFacade_.FindByInviteTokenAsync(model.Token);
 			if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
-				throw new UnauthorizedException("Invalid or expired invite token");
+				throw new UnauthorizedException("Token di invito non valido o scaduto");
 
 			await employeeFacade_.CreateAsync(new Employee
 			{
@@ -120,13 +120,13 @@ namespace Five68.Services
 
 			if (model.Role <= requester.Role)
 			{
-				throw new ForbiddenException("Cannot create a user with higher or equal role");
+				throw new ForbiddenException("Non puoi creare un utente con un ruolo uguale o superiore al tuo");
 			}
 
 			User existing = await userFacade_.FindByEmailAsync(model.Email);
 			if (existing is not null)
 			{
-				throw new EntityException("Email already in use");
+				throw new EntityException("Email già in uso");
 			}
 
 			await userFacade_.CreateAsync(new User
@@ -149,7 +149,7 @@ namespace Five68.Services
 
 			if (!userUtils_.CheckPassword(user, model.CurrentPassword))
 			{
-				throw new UnauthorizedException("Current password is incorrect");
+				throw new EntityException("La password attuale non è corretta");
 			}
 
 			user.PasswordHash = userUtils_.HashAndCheckPassword(model.NewPassword);

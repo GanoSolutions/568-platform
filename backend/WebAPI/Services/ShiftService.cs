@@ -33,7 +33,7 @@ namespace Five68.Services
 		{
 			if (end < start)
 			{
-				throw new EntityException("End time must be after start time");
+				throw new EntityException("La data di fine deve essere successiva alla data di inizio");
 			}
 
 			return (await _shiftFacade.GetByDateRangeAsync(start, end)).Select(ShiftDTO.FromShift);
@@ -43,16 +43,16 @@ namespace Five68.Services
 		{
 			User requester = await RequireManagerOrAdmin(requesterId);
 
-			Employee employee = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Employee not found");
+			Employee employee = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Dipendente non trovato");
 			if (await _shiftFacade.IsClosedDayAsync(model.Date))
 			{
-				throw new EntityException("Cannot assign an employee on a closed day");
+				throw new EntityException("Non è possibile assegnare un dipendente in un giorno di chiusura");
 			}
 
 			Shift existing = await _shiftFacade.FindByDateAndEmployeeAsync(model.Date, model.EmployeeId);
 			if (existing is not null)
 			{
-				throw new EntityException("Employee is already assigned on this date");
+				throw new EntityException("Il dipendente è già assegnato in questa data");
 			}
 
 			Shift created = await _shiftFacade.CreateAsync(new Shift
@@ -73,10 +73,10 @@ namespace Five68.Services
 		{
 			User requester = await RequireManagerOrAdmin(requesterId);
 
-			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Shift not found");
+			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
 			if (await _shiftFacade.IsClosedDayAsync(shift.Date))
 			{
-				throw new EntityException("Cannot update a shift on a closed day");
+				throw new EntityException("Non è possibile modificare un turno in un giorno di chiusura");
 			}
 
 			shift.StartTime = model.StartTime;
@@ -92,7 +92,7 @@ namespace Five68.Services
 		{
 			User requester = await RequireManagerOrAdmin(requesterId);
 
-			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Shift not found");
+			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
 			await _shiftFacade.DeleteAsync(shift);
 
 			_logger.LogInformation($"User {requester.Email} deleted shift on {shift.Date} - {shift.StartTime}");
@@ -103,7 +103,7 @@ namespace Five68.Services
 			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
 			if (requester.Role == UserRole.Employee)
 			{
-				throw new ForbiddenException("You can't perform this action");
+				throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
 			}
 
 			return requester;
