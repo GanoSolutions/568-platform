@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useCalendar, getWeekNumber } from '@/hooks/useCalendar';
 import { useEmployees } from '@/hooks/useEmployees';
-import DayRow from '@/components/calendar/DayRow';
+import CalendarGrid from '@/components/calendar/CalendarGrid';
 import CopyWeekModal from '@/components/modals/CopyWeekModal';
 import ShiftModal from '@/components/modals/ShiftModal';
 import SwapModal from '@/components/modals/SwapModal';
@@ -118,27 +118,22 @@ export default function Calendar() {
 				</div>
 			)}
 
-			{/* Righe giorni */}
-			<div className="divide-y divide-slate-100">
-				{loading && (
-					<div className="flex flex-col items-center text-center py-16 px-8 bg-white">
-						<div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-4" />
-						<p className="text-slate-400 text-sm">Caricamento turni...</p>
-					</div>
-				)}
-
-				{!loading && weekDays.map((day) => (
-					<DayRow
-						key={day.toISOString()}
-						date={day}
-						shift={getShiftForDay(day)}
-						employees={employees}
-						onPress={() => setSelectedDay(day)}
-						currentUser={user}
-						hasPendingRequest={(getShiftForDay(day)?.employees ?? []).some(e => pendingShiftIds.has(e.shiftId))}
-					/>
-				))}
-			</div>
+			{/* Griglia settimana: giorni sulle colonne, dipendenti sulle righe */}
+			{loading ? (
+				<div className="flex flex-col items-center text-center py-16 px-8 bg-white">
+					<div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-4" />
+					<p className="text-slate-400 text-sm">Caricamento turni...</p>
+				</div>
+			) : (
+				<CalendarGrid
+					weekDays={weekDays}
+					employees={employees}
+					getShiftForDay={getShiftForDay}
+					currentUser={user}
+					pendingShiftIds={pendingShiftIds}
+					onPressDay={setSelectedDay}
+				/>
+			)}
 
 			{/* Modal Admin: crea / modifica turno */}
 			{user?.role === 'admin' && copyWeekOpen && (

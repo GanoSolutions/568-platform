@@ -105,26 +105,6 @@ export function useCalendar() {
 		reloadCalendar();
 	}, [reloadCalendar]);
 
-	useEffect(() => {
-		const reloadSilently = () => {
-			reloadCalendar();
-		};
-
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				reloadSilently();
-			}
-		};
-
-		window.addEventListener('focus', handleVisibilityChange);
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
-		return () => {
-			window.removeEventListener('focus', handleVisibilityChange);
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-		};
-	}, [reloadCalendar]);
-
 	const getShiftForDay = (date: Date): ShiftData | null => {
 		const key = formatDateKey(date);
 		if (shifts[key]) return shifts[key];

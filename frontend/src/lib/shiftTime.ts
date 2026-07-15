@@ -55,7 +55,7 @@ export function toBackendTime(time: string): string {
 	return `${time}:00`;
 }
 
-/** Etichetta leggibile per un turno, es. "18:00–00:00" o "22:00–02:00 (+1)". */
-export function formatTimeLabel(startTime: string, endTime: string, overnight: boolean): string {
-	return overnight ? `${startTime}–${endTime} (+1)` : `${startTime}–${endTime}`;
+/** Etichetta leggibile per un turno, es. "18:00–00:00". */
+export function formatTimeLabel(startTime: string, endTime: string): string {
+	return `${startTime}–${endTime}`;
 }

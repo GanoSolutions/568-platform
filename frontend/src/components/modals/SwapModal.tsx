@@ -49,7 +49,7 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 				date,
 				shiftId: myShift?.shiftId,
 				targetEmployeeIds: [...selectedColleagues],
-				shiftType: myShift ? formatTimeLabel(myShift.startTime, myShift.endTime, myShift.overnight) : '',
+				shiftType: myShift ? formatTimeLabel(myShift.startTime, myShift.endTime) : '',
 				formattedDate,
 			});
 			setSent(true);
@@ -91,7 +91,7 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 							<div className="flex justify-between text-sm">
 								<span className="text-slate-400">Turno</span>
 								<span className="font-semibold text-slate-800">
-									{myShift ? formatTimeLabel(myShift.startTime, myShift.endTime, myShift.overnight) : ''}
+									{myShift ? formatTimeLabel(myShift.startTime, myShift.endTime) : ''}
 								</span>
 							</div>
 						</div>
