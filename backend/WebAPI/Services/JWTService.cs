@@ -85,19 +85,19 @@ namespace Five68.Services
 			{
 				ClaimsPrincipal principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
 				if (securityToken is not JwtSecurityToken jwtToken || !jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-					throw new UnauthorizedException("Invalid token");
+					throw new UnauthorizedException("Token non valido");
 
 				return principal;
 			}
 			catch (SecurityTokenException ex)
 			{
 				logger_.LogWarning(ex, "");
-				throw new UnauthorizedException("Invalid token");
+				throw new UnauthorizedException("Token non valido");
 			}
 			catch (SecurityTokenArgumentException ex)
 			{
 				logger_.LogWarning(ex, "");
-				throw new UnauthorizedException("Invalid token");
+				throw new UnauthorizedException("Token non valido");
 			}
 		}
 	}

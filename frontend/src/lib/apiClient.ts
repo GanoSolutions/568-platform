@@ -98,6 +98,11 @@ export interface ShiftUpdatePayload {
 	duration: string;
 }
 
+export interface ChangePasswordPayload {
+	currentPassword: string;
+	newPassword: string;
+}
+
 // ---------------------------------------------------------------------------
 // Token storage
 // ---------------------------------------------------------------------------
@@ -259,8 +264,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 			const retried = await fetch(`${API_BASE}${path}`, { ...init, headers });
 
 			if (!retried.ok) {
-				const body = await retried.text().catch(() => 'Request failed');
-				throw new ApiError(retried.status, body);
+				throw new ApiError(retried.status, await extractErrorMessage(retried));
 			}
 
 			return parseBody<T>(retried);
@@ -273,11 +277,22 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 	}
 
 	if (!response.ok) {
-		const body = await response.text().catch(() => 'Request failed');
-		throw new ApiError(response.status, body);
+		throw new ApiError(response.status, await extractErrorMessage(response));
 	}
 
 	return parseBody<T>(response);
+}
+
+async function extractErrorMessage(res: Response): Promise<string> {
+	const text = await res.text().catch(() => '');
+	if (!text) return 'Request failed';
+	try {
+		const parsed = JSON.parse(text) as { message?: unknown };
+		if (typeof parsed.message === 'string' && parsed.message) return parsed.message;
+	} catch {
+		// Corpo non JSON: mostriamo il testo grezzo così com'è.
+	}
+	return text;
 }
 
 async function parseBody<T>(res: Response): Promise<T> {
@@ -328,6 +343,20 @@ export const userApi = {
 
 	acceptInvite: (token: string, password: string) =>
 		api.post<void>('/user/invite/accept', { token, password }),
+
+	changePassword: (payload: ChangePasswordPayload) =>
+		api.post<void>('/user/password', payload),
+};
+
+export const shiftApi = {
+	getByDateRange: (startDate: string, endDate: string) =>
+		api.get<ShiftDTO[]>(`/shift?startDate=${startDate}&endDate=${endDate}`),
+
+	create: (payload: ShiftCreatePayload) => api.post<ShiftDTO>('/shift', payload),
+
+	update: (id: string, payload: ShiftUpdatePayload) => api.put<ShiftDTO>(`/shift/${id}`, payload),
+
+	del: (id: string) => api.del<void>(`/shift/${id}`),
 };
 
 export const shiftApi = {

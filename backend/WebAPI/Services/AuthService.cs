@@ -35,7 +35,7 @@ namespace Five68.Services
 				throw new UnauthorizedException("Account non attivo");
 			}
 
-			Tokens token = jwtService_.GenerateTokens(user.Id, user.Email) ?? throw new InternalServerErrorException("Invalid attempt");
+			Tokens token = jwtService_.GenerateTokens(user.Id, user.Email) ?? throw new InternalServerErrorException("Tentativo non valido");
 
 			await refreshTokenFacade_.UpsertUserRefreshTokens(new UserRefreshTokens
 			{
@@ -55,16 +55,16 @@ namespace Five68.Services
 
 			if (email is null || userId is null || !Guid.TryParse(userId, out Guid id))
 			{
-				throw new UnauthorizedException("Invalid token");
+				throw new UnauthorizedException("Token non valido");
 			}
 
 			UserRefreshTokens? savedRefreshToken = await refreshTokenFacade_.ConsumeRefreshToken(email);
 			if (savedRefreshToken is null || savedRefreshToken.RefreshToken != token.RefreshToken || savedRefreshToken.ExpirationDate < DateTime.UtcNow)
 			{
-				throw new UnauthorizedException("Invalid or expired refresh token");
+				throw new UnauthorizedException("Refresh token non valido o scaduto");
 			}
 
-			Tokens newTokens = jwtService_.GenerateTokens(id, email) ?? throw new UnauthorizedException("Invalid attempt");
+			Tokens newTokens = jwtService_.GenerateTokens(id, email) ?? throw new UnauthorizedException("Tentativo non valido");
 			await refreshTokenFacade_.UpsertUserRefreshTokens(new UserRefreshTokens
 			{
 				RefreshToken = newTokens.RefreshToken,
