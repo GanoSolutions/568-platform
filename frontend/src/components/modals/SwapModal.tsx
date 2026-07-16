@@ -5,7 +5,7 @@ import { formatTimeLabel } from '@/lib/shiftTime';
 import type { AppUser, Employee, ShiftData } from '@/types';
 
 const DAYS_FULL = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
-const MONTHS_SHORT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const MONTHS_FULL = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
 
 interface SwapModalProps {
 	date: Date
@@ -30,7 +30,7 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 		!shift?.employees?.some(e => e.id === emp.id)
 	);
 
-	const dayLabel = `${DAYS_FULL[date.getDay()]} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
+	const dayLabel = `${DAYS_FULL[date.getDay()]} ${date.getDate()} ${MONTHS_FULL[date.getMonth()]}`;
 	const formattedDate = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 
 	const toggleColleague = (id: string) => {
@@ -61,7 +61,7 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 	return (
 		<Dialog open onOpenChange={onClose}>
 			<DialogContent className="max-w-sm w-[92vw] rounded-2xl p-0 overflow-hidden gap-0">
-				<DialogHeader className="px-5 pt-5 pb-4 border-b border-slate-100">
+				<DialogHeader className="px-5 pt-5 pb-3 border-b border-slate-100">
 					<DialogTitle className="text-slate-800">Richiedi cambio turno</DialogTitle>
 				</DialogHeader>
 
@@ -81,7 +81,7 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 						</p>
 					</div>
 				) : (
-					<div className="px-5 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+					<div className="px-5 pt-3 pb-4 space-y-3 max-h-[60vh] overflow-y-auto">
 						{/* Riepilogo turno */}
 						<div className="bg-slate-50 rounded-xl px-4 py-3 space-y-1">
 							<div className="flex justify-between text-sm">
