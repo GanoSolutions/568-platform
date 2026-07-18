@@ -25,7 +25,7 @@ export default function DeleteConfirmDialog({ employee, deleting, onConfirm, onC
 						Il nominativo verrà rimosso da tutti i turni futuri. I turni passati rimarranno invariati.
 					</p>
 				</div>
-				<DialogFooter className="px-5 pb-5 flex gap-2">
+				<DialogFooter className="px-5 pb-5 flex gap-2 mx-0 mb-0">
 					<Button variant="outline" onClick={onClose} disabled={deleting} className="flex-1 rounded-xl py-3 text-sm">Annulla</Button>
 					<Button onClick={onConfirm} disabled={deleting} className="flex-1 rounded-xl py-3 text-sm bg-red-500 hover:bg-red-400 text-white flex items-center justify-center gap-2">
 						{deleting ? (

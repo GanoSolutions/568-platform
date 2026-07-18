@@ -142,7 +142,7 @@ export default function SwapModal({ date, shift, employees, currentUser, onClose
 					</div>
 				)}
 
-				<DialogFooter className="px-5 py-4 border-t border-slate-100 flex gap-2">
+				<DialogFooter className="px-5 py-4 border-t border-slate-100 flex gap-2 mx-0 mb-0">
 					{sent ? (
 						<Button onClick={onClose} className="w-full rounded-xl py-3 text-sm bg-indigo-500 hover:bg-indigo-400 text-white">
 							Chiudi
