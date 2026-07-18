@@ -124,7 +124,7 @@ export default function ShiftModal({ date, shift, employees, onSave, onClose, sa
 					)}
 				</div>
 
-				<DialogFooter className="px-5 py-4 border-t border-slate-100 flex gap-2">
+				<DialogFooter className="px-5 py-4 border-t border-slate-100 flex gap-2 mx-0 mb-0">
 					<Button variant="outline" onClick={onClose} disabled={submitting} className="flex-1 rounded-xl py-3 text-sm">Annulla</Button>
 					<Button
 						onClick={handleSave}
