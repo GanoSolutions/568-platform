@@ -26,7 +26,7 @@ namespace Five68.Utils
 			{
 				var payload = new { chat_id = chatId, text };
 				using StringContent content = new(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-				HttpResponseMessage response = await _httpClient.PostAsync(url, content, cancellationToken);
+				await _httpClient.PostAsync(url, content, cancellationToken);
 			}
 		}
 	}
