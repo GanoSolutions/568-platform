@@ -326,5 +326,5 @@ backend/WebAPI/appsettings*.json
 !backend/WebAPI/appsettings.json
 
 backend/WebAPI/wwwroot/*
-dotnet
+dotnet/WebAPI/obj
 .claude

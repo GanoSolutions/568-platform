@@ -30,7 +30,7 @@ namespace Five68
 				.AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
 				.AddEnvironmentVariables();
 
-			InitializeLogger();
+			InitializeLogger(builder.Configuration);
 
 			LogManager.GetCurrentClassLogger().Debug(
 				"Environment: {0} | Loaded config keys: {1}",
@@ -59,7 +59,7 @@ namespace Five68
 				{
 					[new OpenApiSecuritySchemeReference("bearer", document)] = []
 				});
-				String xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+				string xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
 				c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
 
 				// produce a correct example in swagger
@@ -188,7 +188,7 @@ namespace Five68
 			services.AddControllers();
 		}
 
-		private static void InitializeLogger()
+		private static void InitializeLogger(IConfiguration configuration)
 		{
 			LoggingConfiguration config = new();
 			LogManager.Setup().RegisterNLogWeb();
@@ -199,7 +199,36 @@ namespace Five68
 				Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}|${exception:format=ToString}",
 			};
 			config.AddRule(NLog.LogLevel.Trace, NLog.LogLevel.Fatal, consoleTarget, "*");
+
+			TelegramSettings telegramSettings = configuration
+				.GetSection(AppSettings.Position)
+				.GetSection("Telegram")
+				.Get<TelegramSettings>() ?? new();
+			if (telegramSettings.Enabled)
+			{
+				if (string.IsNullOrWhiteSpace(telegramSettings.BotToken) || telegramSettings.ChatIds.Count == 0)
+				{
+					throw new InvalidOperationException("Telegram logging è abilitato ma BotToken o ChatIds non sono configurati.");
+				}
+
+				TelegramTarget telegramTarget = new()
+				{
+					Name = "Telegram",
+					BotToken = telegramSettings.BotToken,
+					ChatIds = telegramSettings.ChatIds,
+					Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}|${exception:format=ToString}",
+					RetryCount = 2,
+					RetryDelayMilliseconds = 1000,
+				};
+				config.AddRule(NLog.LogLevel.Error, NLog.LogLevel.Fatal, telegramTarget, "*");
+			}
+
 			LogManager.Configuration = config;
+
+			if (telegramSettings.Enabled)
+			{
+				LogManager.GetCurrentClassLogger().Info("Telegram logger initialized");
+			}
 		}
 	}
 }

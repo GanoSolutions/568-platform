@@ -25,4 +25,11 @@ namespace Five68
 		public bool ValidateIssuer { get; init; }
 		public bool ValidateAudience { get; init; }
 	}
+
+	public class TelegramSettings
+	{
+		public bool Enabled { get; init; }
+		public string BotToken { get; init; } = string.Empty;
+		public List<string> ChatIds { get; init; } = [];
+	}
 }
