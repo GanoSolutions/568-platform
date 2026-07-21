@@ -1,7 +1,8 @@
 // useCalendar.ts
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import type { AppUser, Employee, ShiftData, ShiftEmployee } from '@/types';
+import { settingsApi, shiftApi, type ShiftDTO } from '@/lib/apiClient';
+import { computeDuration, toBackendTime, toDisplayRange } from '@/lib/shiftTime';
+import type { ShiftData, ShiftEmployee } from '@/types';
 
 type ShiftsMap = Record<string, ShiftData>
 
@@ -27,34 +28,6 @@ export function formatDateKey(date: Date): string {
 	return `${y}-${m}-${d}`;
 }
 
-function isDefaultClosed(date: Date): boolean {
-	const dow = date.getDay();
-	if (dow === 0 || dow === 1) return true; // Domenica e Lunedì
-	const m = date.getMonth() + 1;
-	const d = date.getDate();
-	if (m === 12 && (d === 24 || d === 25 || d === 26 || d === 31)) return true;
-	if (m === 1 && d === 1) return true;
-	if (m === 5 && d === 1) return true;
-	return false;
-}
-
-// Dati mock — verranno sostituiti con Supabase
-export const MOCK_EMPLOYEES: Employee[] = [
-	{ id: '1', name: 'Mario Rossi', color: '#6366f1' },
-	{ id: '2', name: 'Giulia Bianchi', color: '#f43f5e' },
-	{ id: '3', name: 'Luca Verdi', color: '#f59e0b' },
-	{ id: '4', name: 'Anna Neri', color: '#10b981' },
-	{ id: '5', name: 'Carlo Blu', color: '#3b82f6' },
-];
-
-const MOCK_SHIFTS: ShiftsMap = {
-	'2026-03-24': { closed: false, employees: [{ id: '1', partial: false }, { id: '2', partial: true }, { id: '3', partial: false }] },
-	'2026-03-25': { closed: false, employees: [{ id: '1', partial: false }, { id: '4', partial: false }] },
-	'2026-03-26': { closed: false, employees: [{ id: '2', partial: false }, { id: '5', partial: false }] },
-	'2026-03-27': { closed: false, employees: [{ id: '3', partial: false }, { id: '4', partial: true }] },
-	'2026-03-28': { closed: false, employees: [{ id: '1', partial: false }, { id: '2', partial: false }, { id: '5', partial: false }] },
-};
-
 export function getWeekNumber(date: Date): number {
 	const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 	const dayNum = d.getUTCDay() || 7;
@@ -71,11 +44,21 @@ function getWeekRange(monday: Date): { start: string; end: string } {
 	return { start, end };
 }
 
-export function useCalendar(currentUser: AppUser | null) {
+function groupShiftsByDate(dtos: ShiftDTO[]): ShiftsMap {
+	return dtos.reduce<ShiftsMap>((acc, dto) => {
+		const { startTime, endTime, overnight } = toDisplayRange(dto.startTime, dto.duration);
+		const entry: ShiftEmployee = { id: dto.employeeId, shiftId: dto.id, startTime, endTime, overnight };
+		if (!acc[dto.date]) acc[dto.date] = { closed: false, employees: [] };
+		acc[dto.date].employees.push(entry);
+		return acc;
+	}, {});
+}
+
+export function useCalendar() {
 	const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()));
-	const [shifts, setShifts] = useState<ShiftsMap>(isSupabaseConfigured ? {} : MOCK_SHIFTS);
-	const [employees, setEmployees] = useState<Employee[]>(isSupabaseConfigured ? [] : MOCK_EMPLOYEES);
-	const [loading, setLoading] = useState(isSupabaseConfigured);
+	const [shifts, setShifts] = useState<ShiftsMap>({});
+	const [closedDays, setClosedDays] = useState<Set<string>>(new Set());
+	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
 
 	const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -94,197 +77,88 @@ export function useCalendar(currentUser: AppUser | null) {
 		const d = new Date(prev); d.setDate(d.getDate() + 7); return d;
 	});
 
-	const loadEmployees = useCallback(async (): Promise<Employee[]> => {
-		if (!isSupabaseConfigured || !supabase) return MOCK_EMPLOYEES;
-
-		const { data, error: employeesError } = await supabase
-			.from('profiles')
-			.select('id, full_name, email, role, color, employees!inner(profile_id)')
-			.order('full_name', { ascending: true });
-
-		if (employeesError) throw employeesError;
-
-		return (data ?? []).map((row) => ({
-			id: row.id,
-			name: row.full_name,
-			email: row.email,
-			role: row.role,
-			color: row.color ?? '#6366f1',
-		}));
-	}, []);
-
-	const loadWeekShifts = useCallback(async (): Promise<ShiftsMap> => {
-		if (!isSupabaseConfigured || !supabase) return MOCK_SHIFTS;
-
-		const { data, error: shiftsError } = await supabase
-			.from('shifts')
-			.select('id, work_date, is_closed, shift_assignments(employee_id, is_partial)')
-			.gte('work_date', weekRange.start)
-			.lte('work_date', weekRange.end)
-			.order('work_date', { ascending: true });
-
-		if (shiftsError) throw shiftsError;
-
-		return (data ?? []).reduce<ShiftsMap>((acc, row) => {
-			acc[row.work_date] = {
-				id: row.id,
-				closed: row.is_closed,
-				employees: ((row.shift_assignments as { employee_id: string; is_partial: boolean }[]) ?? []).map((assignment) => ({
-					id: assignment.employee_id,
-					partial: assignment.is_partial,
-				})),
-			};
-			return acc;
-		}, {});
-	}, [weekRange.end, weekRange.start]);
-
 	const reloadCalendar = useCallback(async () => {
-		if (!isSupabaseConfigured || !supabase) {
-			setLoading(false);
-			return;
-		}
-
 		setLoading(true);
 		setError('');
 
 		try {
-			const [loadedEmployees, loadedShifts] = await Promise.all([
-				loadEmployees(),
-				loadWeekShifts(),
+			const [dtos, closedDayDtos] = await Promise.all([
+				shiftApi.getByDateRange(weekRange.start, weekRange.end),
+				settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end),
 			]);
-
-			setEmployees(loadedEmployees);
-			setShifts(loadedShifts);
+			setShifts(groupShiftsByDate(dtos));
+			setClosedDays(new Set(closedDayDtos.map(d => d.date)));
 		} catch (loadError) {
-			setError((loadError as Error).message || 'Caricamento calendario non riuscito');
+			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
 		} finally {
 			setLoading(false);
 		}
-	}, [loadEmployees, loadWeekShifts]);
+	}, [weekRange.start, weekRange.end]);
 
 	useEffect(() => {
 		reloadCalendar();
 	}, [reloadCalendar]);
 
-	useEffect(() => {
-		if (!isSupabaseConfigured || !supabase || !currentUser?.id) {
-			return undefined;
-		}
-
-		const sb = supabase;
-
-		const reloadSilently = () => {
-			reloadCalendar();
-		};
-
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				reloadSilently();
-			}
-		};
-
-		window.addEventListener('focus', handleVisibilityChange);
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
-		const channel = sb
-			.channel(`calendar-${currentUser.id}`)
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, reloadSilently)
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'shift_assignments' }, reloadSilently)
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests' }, reloadSilently)
-			.subscribe();
-
-		return () => {
-			window.removeEventListener('focus', handleVisibilityChange);
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-			sb.removeChannel(channel);
-		};
-	}, [currentUser?.id, reloadCalendar]);
-
 	const getShiftForDay = (date: Date): ShiftData | null => {
 		const key = formatDateKey(date);
-		if (shifts[key]) return shifts[key];
-		if (isDefaultClosed(date)) return { closed: true, employees: [] };
+		const closed = closedDays.has(key);
+		if (shifts[key]) return { ...shifts[key], closed };
+		if (closed) return { closed: true, employees: [] };
 		return null;
 	};
 
-	const persistShiftForDate = useCallback(async (dateKey: string, shiftData: ShiftData | null) => {
-		if (!isSupabaseConfigured || !supabase) {
-			setShifts(prev => {
-				const next = { ...prev };
-				if (shiftData === null) {
-					delete next[dateKey];
-					return next;
-				}
-
-				next[dateKey] = shiftData;
-				return next;
-			});
-			return;
-		}
-
-		if (shiftData === null) {
-			const { error: deleteShiftError } = await supabase
-				.from('shifts')
-				.delete()
-				.eq('work_date', dateKey);
-
-			if (deleteShiftError) throw deleteShiftError;
-			return;
-		}
-
-		const { data: shiftRow, error: shiftError } = await supabase
-			.from('shifts')
-			.upsert({
-				work_date: dateKey,
-				is_closed: shiftData.closed,
-				created_by: currentUser!.id,
-			}, { onConflict: 'work_date' })
-			.select('id')
-			.single();
-
-		if (shiftError) throw shiftError;
-
-		const { error: deleteAssignmentsError } = await supabase
-			.from('shift_assignments')
-			.delete()
-			.eq('shift_id', shiftRow.id);
-
-		if (deleteAssignmentsError) throw deleteAssignmentsError;
-
-		if (!shiftData.closed && shiftData.employees.length > 0) {
-			const { error: insertAssignmentsError } = await supabase
-				.from('shift_assignments')
-				.insert(
-					shiftData.employees.map((employee: ShiftEmployee) => ({
-						shift_id: shiftRow.id,
-						employee_id: employee.id,
-						is_partial: employee.partial,
-					})),
-				);
-
-			if (insertAssignmentsError) throw insertAssignmentsError;
-		}
-	}, [currentUser]);
-
-	const saveShift = async (date: Date, shiftData: ShiftData | null) => {
+	/**
+	 * Applica il nuovo elenco di dipendenti/orari per un giorno confrontandolo con
+	 * quello attuale: crea i nuovi turni, aggiorna quelli con orario cambiato,
+	 * cancella quelli rimossi. La PUT/POST su un singolo turno restituisce già
+	 * l'oggetto aggiornato, quindi lo stato locale viene patchato direttamente con
+	 * quella risposta invece di rifare il fetch dell'intera settimana. La chiusura
+	 * del giorno resta quella persistita lato backend (`/settings/closed-days`),
+	 * non gestibile da qui.
+	 */
+	const saveShift = async (date: Date, desiredEmployees: { employeeId: string; startTime: string; endTime: string }[]) => {
 		const key = formatDateKey(date);
-
-		if (!isSupabaseConfigured || !supabase) {
-			await persistShiftForDate(key, shiftData);
-			return;
-		}
-
-		if (!currentUser?.id) {
-			throw new Error('Utente non riconosciuto');
-		}
+		const current = shifts[key]?.employees ?? [];
+		const currentByEmployeeId = new Map(current.map(e => [e.id, e]));
+		const desiredByEmployeeId = new Map(desiredEmployees.map(e => [e.employeeId, e]));
 
 		setError('');
 
-		await persistShiftForDate(key, shiftData);
+		for (const existing of current) {
+			if (!desiredByEmployeeId.has(existing.id)) {
+				await shiftApi.del(existing.shiftId);
+			}
+		}
 
-		await reloadCalendar();
+		const updatedEmployees: ShiftEmployee[] = [];
+
+		for (const desired of desiredEmployees) {
+			const startTime = toBackendTime(desired.startTime);
+			const duration = computeDuration(desired.startTime, desired.endTime);
+			const existing = currentByEmployeeId.get(desired.employeeId);
+
+			let dto: ShiftDTO;
+			if (!existing) {
+				dto = await shiftApi.create({ employeeId: desired.employeeId, date: key, startTime, duration });
+			} else if (existing.startTime !== desired.startTime || existing.endTime !== desired.endTime) {
+				dto = await shiftApi.update(existing.shiftId, { startTime, duration });
+			} else {
+				updatedEmployees.push(existing);
+				continue;
+			}
+			const displayRange = toDisplayRange(dto.startTime, dto.duration);
+			updatedEmployees.push({ id: dto.employeeId, shiftId: dto.id, ...displayRange });
+		}
+
+		setShifts(prev => ({ ...prev, [key]: { closed: false, employees: updatedEmployees } }));
 	};
 
+	/**
+	 * Copia i turni della settimana visibile su ogni settimana nell'intervallo
+	 * scelto. Un fallimento su un singolo turno (es. 422 perché il dipendente è
+	 * già assegnato quel giorno) non blocca gli altri: viene raccolto e segnalato
+	 * in coda dopo aver comunque applicato tutto il resto.
+	 */
 	const copyWeek = async ({ startDate, endDate }: { startDate: string; endDate: string }) => {
 		const sourceWeek = weekDays.map((day) => ({
 			date: new Date(day),
@@ -299,6 +173,7 @@ export function useCalendar(currentUser: AppUser | null) {
 		}
 
 		setError('');
+		const failures: string[] = [];
 
 		for (let monday = new Date(startMonday); monday <= endMonday; monday = addDays(monday, 7)) {
 			for (let index = 0; index < sourceWeek.length; index += 1) {
@@ -306,51 +181,29 @@ export function useCalendar(currentUser: AppUser | null) {
 				const targetDate = addDays(monday, index);
 				const targetKey = formatDateKey(targetDate);
 
-				if (targetKey === formatDateKey(sourceDay.date)) {
-					continue;
-				}
+				if (targetKey === formatDateKey(sourceDay.date)) continue;
+				if (!sourceDay.shift || sourceDay.shift.closed) continue;
 
-				const sourceShift = sourceDay.shift;
-				const clonedShift: ShiftData | null = sourceShift
-					? {
-						closed: sourceShift.closed,
-						employees: (sourceShift.employees ?? []).map((employee: ShiftEmployee) => ({
-							id: employee.id,
-							partial: employee.partial,
-						})),
+				for (const employee of sourceDay.shift.employees) {
+					try {
+						await shiftApi.create({
+							employeeId: employee.id,
+							date: targetKey,
+							startTime: toBackendTime(employee.startTime),
+							duration: computeDuration(employee.startTime, employee.endTime),
+						});
+					} catch (copyError) {
+						failures.push(`${targetKey}: ${copyError instanceof Error ? copyError.message : 'errore sconosciuto'}`);
 					}
-					: null;
-
-				await persistShiftForDate(targetKey, clonedShift);
+				}
 			}
 		}
 
 		await reloadCalendar();
-	};
 
-	const createSwapRequest = async ({ date, shiftId, targetEmployeeId }: { date: Date; shiftId: string; targetEmployeeId: string }) => {
-		if (!currentUser?.id) {
-			throw new Error('Utente non riconosciuto');
+		if (failures.length > 0) {
+			throw new Error(`Alcuni turni non sono stati copiati:\n${failures.join('\n')}`);
 		}
-
-		if (!shiftId) {
-			throw new Error(`Nessun turno trovato per il giorno ${formatDateKey(date)}`);
-		}
-
-		if (!isSupabaseConfigured || !supabase) {
-			return;
-		}
-
-		setError('');
-		const { error: swapError } = await supabase
-			.from('swap_requests')
-			.insert({
-				shift_id: shiftId,
-				requester_id: currentUser.id,
-				target_employee_id: targetEmployeeId,
-			});
-
-		if (swapError) throw swapError;
 	};
 
 	return {
@@ -361,8 +214,6 @@ export function useCalendar(currentUser: AppUser | null) {
 		getShiftForDay,
 		saveShift,
 		copyWeek,
-		createSwapRequest,
-		employees,
 		loading,
 		error,
 		reloadCalendar,

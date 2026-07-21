@@ -4,22 +4,34 @@ import { Button } from '@/components/ui/button';
 import type { Employee, ShiftData } from '@/types';
 
 const DAYS_FULL = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
-const MONTHS_SHORT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const MONTHS_FULL = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+
+// Convenzione turno pieno usata nei dati di esempio: 18:00 -> 00:00 (6h).
+const DEFAULT_START_TIME = '18:00';
+const DEFAULT_END_TIME = '00:00';
+
+interface ShiftTimes {
+	startTime: string
+	endTime: string
+}
 
 interface ShiftModalProps {
 	date: Date
 	shift: ShiftData | null
 	employees: Employee[]
-	onSave: (data: ShiftData) => Promise<void>
+	preselectedEmployeeId?: string
+	onSave: (entries: { employeeId: string; startTime: string; endTime: string }[]) => Promise<void>
 	onClose: () => void
 	saveError: string
 }
 
-export default function ShiftModal({ date, shift, employees, onSave, onClose, saveError }: ShiftModalProps) {
-	const [closed, setClosed] = useState(shift?.closed ?? false);
-	const [selected, setSelected] = useState<Record<string, { partial: boolean }>>(() => {
-		const map: Record<string, { partial: boolean }> = {};
-		shift?.employees?.forEach(e => { map[e.id] = { partial: e.partial ?? false }; });
+export default function ShiftModal({ date, shift, employees, preselectedEmployeeId, onSave, onClose, saveError }: ShiftModalProps) {
+	const [selected, setSelected] = useState<Record<string, ShiftTimes>>(() => {
+		const map: Record<string, ShiftTimes> = {};
+		shift?.employees?.forEach(e => { map[e.id] = { startTime: e.startTime, endTime: e.endTime }; });
+		if (preselectedEmployeeId && !map[preselectedEmployeeId]) {
+			map[preselectedEmployeeId] = { startTime: DEFAULT_START_TIME, endTime: DEFAULT_END_TIME };
+		}
 		return map;
 	});
 	const [submitting, setSubmitting] = useState(false);
@@ -31,101 +43,86 @@ export default function ShiftModal({ date, shift, employees, onSave, onClose, sa
 				delete next[id];
 				return next;
 			}
-			return { ...prev, [id]: { partial: false } };
+			return { ...prev, [id]: { startTime: DEFAULT_START_TIME, endTime: DEFAULT_END_TIME } };
 		});
 	};
 
-	const togglePartial = (id: string, e: React.MouseEvent) => {
-		e.stopPropagation();
-		setSelected(prev => ({
-			...prev,
-			[id]: { ...prev[id], partial: !prev[id]?.partial },
-		}));
-	};
-
-	const handleClosed = () => {
-		setClosed(c => !c);
-		setSelected({});
+	const updateTime = (id: string, field: keyof ShiftTimes, value: string) => {
+		setSelected(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
 	};
 
 	const handleSave = async () => {
 		setSubmitting(true);
 		try {
-			if (closed) {
-				await onSave({ closed: true, employees: [] });
-			} else {
-				const employeeList = Object.entries(selected).map(([id, v]) => ({ id, partial: v.partial }));
-				await onSave({ closed: false, employees: employeeList });
-			}
+			const entries = Object.entries(selected).map(([employeeId, times]) => ({ employeeId, ...times }));
+			await onSave(entries);
 		} finally {
 			setSubmitting(false);
 		}
 	};
 
-	const canSave = closed || Object.keys(selected).length > 0;
-	const dayLabel = `${DAYS_FULL[date.getDay()]} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
+	const dayLabel = `${DAYS_FULL[date.getDay()]} ${date.getDate()} ${MONTHS_FULL[date.getMonth()]}`;
 
 	return (
 		<Dialog open onOpenChange={onClose}>
 			<DialogContent className="max-w-sm w-[92vw] rounded-2xl p-0 overflow-hidden gap-0">
-				<DialogHeader className="px-5 pt-5 pb-4 border-b border-slate-100">
+				<DialogHeader className="px-5 pt-5 pb-3 border-b border-slate-100">
 					<DialogTitle className="capitalize text-slate-800">{dayLabel}</DialogTitle>
 				</DialogHeader>
 
-				<div className="px-5 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
-					{/* Giornata di chiusura */}
-					<button
-						onClick={handleClosed}
-						className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition ${closed ? 'border-slate-400 bg-slate-100' : 'border-slate-200 bg-white hover:border-slate-300'
-						}`}
-					>
-						<span className="text-sm font-medium text-slate-700">Giornata di chiusura</span>
-						<Checkbox checked={closed} color="#64748b" />
-					</button>
-
-					{/* Lista dipendenti */}
-					{!closed && (
-						<div className="space-y-2">
-							<p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider px-1 pt-1">
-								Dipendenti in turno
-							</p>
-							{employees.map((emp) => {
-								const isSelected = selected[emp.id] !== undefined;
-								const isPartial = !!selected[emp.id]?.partial;
-								return (
+				<div className="px-5 pt-3 pb-4 space-y-3 max-h-[60vh] overflow-y-auto">
+					<div className="space-y-2">
+						<p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider px-1 pt-1">
+							Dipendenti in turno
+						</p>
+						{employees.map((emp) => {
+							const isSelected = selected[emp.id] !== undefined;
+							const times = selected[emp.id];
+							return (
+								<div
+									key={emp.id}
+									className="rounded-xl border-2 transition"
+									style={isSelected
+										? { borderColor: emp.color + '60', backgroundColor: emp.color + '12' }
+										: { borderColor: '#e2e8f0', backgroundColor: 'white' }
+									}
+								>
 									<div
-										key={emp.id}
 										onClick={() => toggleEmployee(emp.id)}
-										className="flex items-center justify-between px-4 py-3 rounded-xl border-2 cursor-pointer transition"
-										style={isSelected
-											? { borderColor: emp.color + '60', backgroundColor: emp.color + '12' }
-											: { borderColor: '#e2e8f0', backgroundColor: 'white' }
-										}
+										className="flex items-center justify-between px-4 py-3 cursor-pointer"
 									>
 										<div className="flex items-center gap-3">
 											<div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: emp.color }} />
 											<span className="text-sm font-medium text-slate-700">{emp.name}</span>
 										</div>
-										<div className="flex items-center gap-2">
-											{isSelected && (
-												<button
-													onClick={(e) => togglePartial(emp.id, e)}
-													className={`text-xs px-2 py-0.5 rounded-md font-bold transition ${isPartial ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'
-													}`}
-												>
-													½
-												</button>
-											)}
-											<Checkbox checked={isSelected} color={emp.color} />
-										</div>
+										<Checkbox checked={isSelected} color={emp.color} />
 									</div>
-								);
-							})}
-						</div>
-					)}
+									{isSelected && times && (
+										<div className="flex items-center gap-2 px-4 pb-3">
+											<input
+												type="time"
+												value={times.startTime}
+												onClick={(e) => e.stopPropagation()}
+												onChange={(e) => updateTime(emp.id, 'startTime', e.target.value)}
+												className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-indigo-400"
+											/>
+											<span className="text-slate-400 text-sm">–</span>
+											<input
+												type="time"
+												value={times.endTime}
+												onClick={(e) => e.stopPropagation()}
+												onChange={(e) => updateTime(emp.id, 'endTime', e.target.value)}
+												className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-indigo-400"
+											/>
+										</div>
+									)}
+								</div>
+							);
+						})}
+					</div>
 
 					{saveError && (
-						<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+						<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 whitespace-pre-line">
 							{saveError}
 						</div>
 					)}
@@ -135,7 +132,7 @@ export default function ShiftModal({ date, shift, employees, onSave, onClose, sa
 					<Button variant="outline" onClick={onClose} disabled={submitting} className="flex-1 rounded-xl py-3 text-sm">Annulla</Button>
 					<Button
 						onClick={handleSave}
-						disabled={!canSave || submitting}
+						disabled={submitting}
 						className="flex-1 rounded-xl py-3 text-sm bg-indigo-500 hover:bg-indigo-400 text-white disabled:opacity-70"
 					>
 						{submitting ? 'Salvataggio...' : 'Conferma'}

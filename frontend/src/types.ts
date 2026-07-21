@@ -16,11 +16,13 @@ export interface EmployeeDetail extends Employee {
 
 export interface ShiftEmployee {
   id: string
-  partial: boolean
+  shiftId: string
+  startTime: string
+  endTime: string
+  overnight: boolean
 }
 
 export interface ShiftData {
-  id?: string
   closed: boolean
   employees: ShiftEmployee[]
 }
