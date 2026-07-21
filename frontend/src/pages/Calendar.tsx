@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useCalendar, getWeekNumber } from '@/hooks/useCalendar';
-import DayRow from '@/components/calendar/DayRow';
+import { useEmployees } from '@/hooks/useEmployees';
+import CalendarGrid from '@/components/calendar/CalendarGrid';
 import CopyWeekModal from '@/components/modals/CopyWeekModal';
 import ShiftModal from '@/components/modals/ShiftModal';
 import SwapModal from '@/components/modals/SwapModal';
-import type { ShiftData } from '@/types';
 
 const MONTHS = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
 	'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
@@ -22,13 +22,22 @@ export default function Calendar() {
 		getShiftForDay,
 		saveShift,
 		copyWeek,
-		employees,
-		loading,
-		error,
-	} = useCalendar(user);
+		loading: calendarLoading,
+		error: calendarError,
+	} = useCalendar();
+	const { employees: allEmployees, loading: employeesLoading, error: employeesError } = useEmployees();
+	// I turni si assegnano a manager/dipendenti, non ad account admin puri.
+	const employees = allEmployees.filter(e => e.role !== 'admin');
+	const loading = calendarLoading || employeesLoading;
 	const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+	const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>(undefined);
 	const [copyWeekOpen, setCopyWeekOpen] = useState(false);
 	const [actionError, setActionError] = useState('');
+
+	const closeShiftModal = () => {
+		setSelectedDay(null);
+		setSelectedEmployeeId(undefined);
+	};
 
 	const month = MONTHS[currentMonday.getMonth()];
 	const year = currentMonday.getFullYear();
@@ -36,11 +45,11 @@ export default function Calendar() {
 
 	const selectedShift = selectedDay ? getShiftForDay(selectedDay) : null;
 
-	const handleSaveShift = async (data: ShiftData) => {
+	const handleSaveShift = async (entries: { employeeId: string; startTime: string; endTime: string }[]) => {
 		setActionError('');
 		try {
-			await saveShift(selectedDay!, data);
-			setSelectedDay(null);
+			await saveShift(selectedDay!, entries);
+			closeShiftModal();
 		} catch (saveError) {
 			setActionError((saveError as Error).message || 'Salvataggio turno non riuscito');
 			throw saveError;
@@ -109,33 +118,28 @@ export default function Calendar() {
 				</div>
 			)}
 
-			{(error || actionError) && (
+			{(calendarError || employeesError || actionError) && (
 				<div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{actionError || error}
+					{actionError || calendarError || employeesError}
 				</div>
 			)}
 
-			{/* Righe giorni */}
-			<div className="divide-y divide-slate-100">
-				{loading && (
-					<div className="flex flex-col items-center text-center py-16 px-8 bg-white">
-						<div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-4" />
-						<p className="text-slate-400 text-sm">Caricamento turni...</p>
-					</div>
-				)}
-
-				{!loading && weekDays.map((day) => (
-					<DayRow
-						key={day.toISOString()}
-						date={day}
-						shift={getShiftForDay(day)}
-						employees={employees}
-						onPress={() => setSelectedDay(day)}
-						currentUser={user}
-						hasPendingRequest={pendingShiftIds.has(getShiftForDay(day)?.id ?? '')}
-					/>
-				))}
-			</div>
+			{/* Griglia settimana: giorni sulle colonne, dipendenti sulle righe */}
+			{loading ? (
+				<div className="flex flex-col items-center text-center py-16 px-8 bg-white">
+					<div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-4" />
+					<p className="text-slate-400 text-sm">Caricamento turni...</p>
+				</div>
+			) : (
+				<CalendarGrid
+					weekDays={weekDays}
+					employees={employees}
+					getShiftForDay={getShiftForDay}
+					currentUser={user}
+					pendingShiftIds={pendingShiftIds}
+					onPressDay={(day, employeeId) => { setSelectedDay(day); setSelectedEmployeeId(employeeId); }}
+				/>
+			)}
 
 			{/* Modal Admin: crea / modifica turno */}
 			{user?.role === 'admin' && copyWeekOpen && (
@@ -152,8 +156,9 @@ export default function Calendar() {
 					date={selectedDay}
 					shift={selectedShift}
 					employees={employees}
+					preselectedEmployeeId={selectedEmployeeId}
 					onSave={handleSaveShift}
-					onClose={() => setSelectedDay(null)}
+					onClose={closeShiftModal}
 					saveError={actionError}
 				/>
 			)}
@@ -165,7 +170,7 @@ export default function Calendar() {
 					shift={selectedShift}
 					employees={employees}
 					currentUser={user}
-					onClose={() => setSelectedDay(null)}
+					onClose={closeShiftModal}
 					onSubmit={handleSwapRequest}
 					submitError={actionError}
 				/>
