@@ -10,7 +10,7 @@ interface CalendarGridProps {
 	getShiftForDay: (date: Date) => ShiftData | null
 	currentUser: AppUser | null
 	pendingShiftIds: Set<string>
-	onPressDay: (date: Date) => void
+	onPressDay: (date: Date, employeeId?: string) => void
 }
 
 function isDayClickable(shift: ShiftData | null, currentUser: AppUser | null): boolean {
@@ -76,7 +76,7 @@ export default function CalendarGrid({ weekDays, employees, getShiftForDay, curr
 								return (
 									<div
 										key={emp.id}
-										onClick={clickable ? () => onPressDay(day) : undefined}
+										onClick={clickable ? () => onPressDay(day, emp.id) : undefined}
 										className={[
 											'border-r border-b border-slate-200 flex items-center justify-center px-1.5 py-2 min-h-13',
 											isClosed ? 'bg-slate-100' : isToday ? 'bg-indigo-50/30' : '',

@@ -358,3 +358,14 @@ export const shiftApi = {
 
 	del: (id: string) => api.del<void>(`/shift/${id}`),
 };
+
+/** Mirror of the C# ClosedDayDTO. */
+export interface ClosedDayDTO {
+	id: string;
+	date: string;
+}
+
+export const settingsApi = {
+	getClosedDaysByDateRange: (startDate: string, endDate: string) =>
+		api.get<ClosedDayDTO[]>(`/settings/closed-days?startDate=${startDate}&endDate=${endDate}`),
+};

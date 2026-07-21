@@ -19,15 +19,19 @@ interface ShiftModalProps {
 	date: Date
 	shift: ShiftData | null
 	employees: Employee[]
+	preselectedEmployeeId?: string
 	onSave: (entries: { employeeId: string; startTime: string; endTime: string }[]) => Promise<void>
 	onClose: () => void
 	saveError: string
 }
 
-export default function ShiftModal({ date, shift, employees, onSave, onClose, saveError }: ShiftModalProps) {
+export default function ShiftModal({ date, shift, employees, preselectedEmployeeId, onSave, onClose, saveError }: ShiftModalProps) {
 	const [selected, setSelected] = useState<Record<string, ShiftTimes>>(() => {
 		const map: Record<string, ShiftTimes> = {};
 		shift?.employees?.forEach(e => { map[e.id] = { startTime: e.startTime, endTime: e.endTime }; });
+		if (preselectedEmployeeId && !map[preselectedEmployeeId]) {
+			map[preselectedEmployeeId] = { startTime: DEFAULT_START_TIME, endTime: DEFAULT_END_TIME };
+		}
 		return map;
 	});
 	const [submitting, setSubmitting] = useState(false);

@@ -1,6 +1,6 @@
 // useCalendar.ts
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { shiftApi, type ShiftDTO } from '@/lib/apiClient';
+import { settingsApi, shiftApi, type ShiftDTO } from '@/lib/apiClient';
 import { computeDuration, toBackendTime, toDisplayRange } from '@/lib/shiftTime';
 import type { ShiftData, ShiftEmployee } from '@/types';
 
@@ -26,17 +26,6 @@ export function formatDateKey(date: Date): string {
 	const m = String(date.getMonth() + 1).padStart(2, '0');
 	const d = String(date.getDate()).padStart(2, '0');
 	return `${y}-${m}-${d}`;
-}
-
-function isDefaultClosed(date: Date): boolean {
-	const dow = date.getDay();
-	if (dow === 0 || dow === 1) return true; // Domenica e Lunedì
-	const m = date.getMonth() + 1;
-	const d = date.getDate();
-	if (m === 12 && (d === 24 || d === 25 || d === 26 || d === 31)) return true;
-	if (m === 1 && d === 1) return true;
-	if (m === 5 && d === 1) return true;
-	return false;
 }
 
 export function getWeekNumber(date: Date): number {
@@ -68,6 +57,7 @@ function groupShiftsByDate(dtos: ShiftDTO[]): ShiftsMap {
 export function useCalendar() {
 	const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()));
 	const [shifts, setShifts] = useState<ShiftsMap>({});
+	const [closedDays, setClosedDays] = useState<Set<string>>(new Set());
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
 
@@ -92,8 +82,12 @@ export function useCalendar() {
 		setError('');
 
 		try {
-			const dtos = await shiftApi.getByDateRange(weekRange.start, weekRange.end);
+			const [dtos, closedDayDtos] = await Promise.all([
+				shiftApi.getByDateRange(weekRange.start, weekRange.end),
+				settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end),
+			]);
 			setShifts(groupShiftsByDate(dtos));
+			setClosedDays(new Set(closedDayDtos.map(d => d.date)));
 		} catch (loadError) {
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
 		} finally {
@@ -107,18 +101,20 @@ export function useCalendar() {
 
 	const getShiftForDay = (date: Date): ShiftData | null => {
 		const key = formatDateKey(date);
-		if (shifts[key]) return shifts[key];
-		if (isDefaultClosed(date)) return { closed: true, employees: [] };
+		const closed = closedDays.has(key);
+		if (shifts[key]) return { ...shifts[key], closed };
+		if (closed) return { closed: true, employees: [] };
 		return null;
 	};
 
 	/**
 	 * Applica il nuovo elenco di dipendenti/orari per un giorno confrontandolo con
 	 * quello attuale: crea i nuovi turni, aggiorna quelli con orario cambiato,
-	 * cancella quelli rimossi. La chiusura di un giorno non è gestibile da qui:
-	 * non esiste un endpoint per persisterla, è solo una stima locale (vedi
-	 * `isDefaultClosed`) — l'unica autorità è il backend, che risponde 422 se il
-	 * giorno risulta chiuso lato server.
+	 * cancella quelli rimossi. La PUT/POST su un singolo turno restituisce già
+	 * l'oggetto aggiornato, quindi lo stato locale viene patchato direttamente con
+	 * quella risposta invece di rifare il fetch dell'intera settimana. La chiusura
+	 * del giorno resta quella persistita lato backend (`/settings/closed-days`),
+	 * non gestibile da qui.
 	 */
 	const saveShift = async (date: Date, desiredEmployees: { employeeId: string; startTime: string; endTime: string }[]) => {
 		const key = formatDateKey(date);
@@ -134,19 +130,27 @@ export function useCalendar() {
 			}
 		}
 
+		const updatedEmployees: ShiftEmployee[] = [];
+
 		for (const desired of desiredEmployees) {
 			const startTime = toBackendTime(desired.startTime);
 			const duration = computeDuration(desired.startTime, desired.endTime);
 			const existing = currentByEmployeeId.get(desired.employeeId);
 
+			let dto: ShiftDTO;
 			if (!existing) {
-				await shiftApi.create({ employeeId: desired.employeeId, date: key, startTime, duration });
+				dto = await shiftApi.create({ employeeId: desired.employeeId, date: key, startTime, duration });
 			} else if (existing.startTime !== desired.startTime || existing.endTime !== desired.endTime) {
-				await shiftApi.update(existing.shiftId, { startTime, duration });
+				dto = await shiftApi.update(existing.shiftId, { startTime, duration });
+			} else {
+				updatedEmployees.push(existing);
+				continue;
 			}
+			const displayRange = toDisplayRange(dto.startTime, dto.duration);
+			updatedEmployees.push({ id: dto.employeeId, shiftId: dto.id, ...displayRange });
 		}
 
-		await reloadCalendar();
+		setShifts(prev => ({ ...prev, [key]: { closed: false, employees: updatedEmployees } }));
 	};
 
 	/**

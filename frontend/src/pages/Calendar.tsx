@@ -30,8 +30,14 @@ export default function Calendar() {
 	const employees = allEmployees.filter(e => e.role !== 'admin');
 	const loading = calendarLoading || employeesLoading;
 	const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+	const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>(undefined);
 	const [copyWeekOpen, setCopyWeekOpen] = useState(false);
 	const [actionError, setActionError] = useState('');
+
+	const closeShiftModal = () => {
+		setSelectedDay(null);
+		setSelectedEmployeeId(undefined);
+	};
 
 	const month = MONTHS[currentMonday.getMonth()];
 	const year = currentMonday.getFullYear();
@@ -43,7 +49,7 @@ export default function Calendar() {
 		setActionError('');
 		try {
 			await saveShift(selectedDay!, entries);
-			setSelectedDay(null);
+			closeShiftModal();
 		} catch (saveError) {
 			setActionError((saveError as Error).message || 'Salvataggio turno non riuscito');
 			throw saveError;
@@ -131,7 +137,7 @@ export default function Calendar() {
 					getShiftForDay={getShiftForDay}
 					currentUser={user}
 					pendingShiftIds={pendingShiftIds}
-					onPressDay={setSelectedDay}
+					onPressDay={(day, employeeId) => { setSelectedDay(day); setSelectedEmployeeId(employeeId); }}
 				/>
 			)}
 
@@ -150,8 +156,9 @@ export default function Calendar() {
 					date={selectedDay}
 					shift={selectedShift}
 					employees={employees}
+					preselectedEmployeeId={selectedEmployeeId}
 					onSave={handleSaveShift}
-					onClose={() => setSelectedDay(null)}
+					onClose={closeShiftModal}
 					saveError={actionError}
 				/>
 			)}
@@ -163,7 +170,7 @@ export default function Calendar() {
 					shift={selectedShift}
 					employees={employees}
 					currentUser={user}
-					onClose={() => setSelectedDay(null)}
+					onClose={closeShiftModal}
 					onSubmit={handleSwapRequest}
 					submitError={actionError}
 				/>
