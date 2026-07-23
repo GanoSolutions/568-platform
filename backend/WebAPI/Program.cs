@@ -160,14 +160,16 @@ namespace Five68
 			services.AddScoped<EmployeeFacade>();
 			services.AddScoped<ShiftFacade>();
 			services.AddScoped<SettingsFacade>();
+			services.AddScoped<SwapRequestFacade>();
 
 			// Services
 			services.AddScoped<AuthService>();
 			services.AddSingleton<JwtService>();
 			services.AddScoped<UserService>();
-			services.AddScoped<IEmailService, NoOpEmailService>();
+			services.AddScoped<INotificationService, NoOpNotificationService>();
 			services.AddScoped<ShiftService>();
 			services.AddScoped<SettingsService>();
+			services.AddScoped<SwapRequestService>();
 
 			// Utils
 			services.AddSingleton<UserUtils>();

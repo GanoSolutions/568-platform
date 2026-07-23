@@ -13,15 +13,15 @@ namespace Five68.Services
 		private readonly UserFacade userFacade_;
 		private readonly EmployeeFacade employeeFacade_;
 		private readonly UserUtils userUtils_;
-		private readonly IEmailService emailService_;
+		private readonly INotificationService _notificationService;
 		private ILogger logger_;
 
-		public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, IEmailService emailService, ILogger<UserService> logger)
+		public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, INotificationService notificationService, ILogger<UserService> logger)
 		{
 			userFacade_ = userFacade;
 			employeeFacade_ = employeeFacade;
 			userUtils_ = userUtils;
-			emailService_ = emailService;
+			_notificationService = notificationService;
 			logger_ = logger;
 		}
 
@@ -80,7 +80,7 @@ namespace Five68.Services
 			user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
 
 			await userFacade_.UpdateAsync(user);
-			await emailService_.SendInviteAsync(user.Email, token);
+			await _notificationService.SendInviteAsync(user.Email, token);
 			logger_.LogInformation($"User {requester.Email} invited {user.Email} to change password");
 			return token;
 		}
@@ -105,7 +105,7 @@ namespace Five68.Services
 			user.InviteToken = null;
 			user.InviteTokenExpiry = null;
 			logger_.LogInformation($"User {user.Email} accepted invite");
-		
+
 			await userFacade_.UpdateAsync(user);
 		}
 

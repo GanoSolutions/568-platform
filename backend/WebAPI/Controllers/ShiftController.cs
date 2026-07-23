@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc;
 using Five68.Services;
 using Five68.Models.DTO;
@@ -125,6 +124,5 @@ namespace Five68.Controllers
 			string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			return Guid.TryParse(requesterId, out Guid id) ? id : Guid.Empty;
 		}
-
 	}
 }
