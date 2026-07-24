@@ -9,19 +9,28 @@ namespace Five68.Services
 {
 	public class SwapRequestService
 	{
+		private INotificationService _notificationService;
 		private readonly SwapRequestFacade _swapRequestFacade;
 		private readonly ShiftFacade _shiftFacade;
 		private readonly EmployeeFacade _employeeFacade;
 		private readonly UserFacade _userFacade;
 		private ILogger _logger;
 
+		private enum SwapRequestAction
+		{
+			Respond,
+			Cancel
+		}
+
 		public SwapRequestService(
+			INotificationService notificationService,
 			SwapRequestFacade swapRequestFacade,
 			ShiftFacade shiftFacade,
 			EmployeeFacade employeeFacade,
 			UserFacade userFacade,
 			ILogger<SwapRequestService> logger)
 		{
+			_notificationService = notificationService;
 			_swapRequestFacade = swapRequestFacade;
 			_shiftFacade = shiftFacade;
 			_employeeFacade = employeeFacade;
@@ -72,7 +81,7 @@ namespace Five68.Services
 
 		public async Task<SwapRequestDTO> Accept(Guid swapRequestId, Guid requesterId)
 		{
-			SwapRequest request = await RequireCanRespond(swapRequestId, requesterId);
+			SwapRequest request = await RequireCanAct(swapRequestId, requesterId, SwapRequestAction.Respond);
 			SwapRequestFacade.AcceptResult result = await _swapRequestFacade.TryAcceptAsync(swapRequestId, request.ShiftId, request.TargetEmployeeId);
 
 			if (result == SwapRequestFacade.AcceptResult.AlreadyHandled)
@@ -92,16 +101,34 @@ namespace Five68.Services
 
 		public async Task<SwapRequestDTO> Reject(Guid swapRequestId, Guid requesterId)
 		{
-			await RequireCanRespond(swapRequestId, requesterId);
+			await RequireCanAct(swapRequestId, requesterId, SwapRequestAction.Respond); // check target
 
-			if (!await _swapRequestFacade.TryRejectAsync(swapRequestId))
+			if (!await _swapRequestFacade.TrySetStatusAsync(swapRequestId, SwapRequestStatus.Rejected))
 			{
 				throw new EntityException("La richiesta è stata già gestita");
 			}
 
+			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
 			_logger.LogInformation($"User {requesterId} rejected swap request {swapRequestId}");
+			await _notificationService.NotifySwapRequestRejectedAsync(updated);
 
-			return SwapRequestDTO.FromSwapRequest(await _swapRequestFacade.FindByIdAsync(swapRequestId));
+			return SwapRequestDTO.FromSwapRequest(updated);
+		}
+
+		public async Task<SwapRequestDTO> Cancel(Guid swapRequestId, Guid requesterId)
+		{
+			await RequireCanAct(swapRequestId, requesterId, SwapRequestAction.Cancel); // check sender
+
+			if (!await _swapRequestFacade.TrySetStatusAsync(swapRequestId, SwapRequestStatus.Cancelled))
+			{
+				throw new EntityException("La richiesta è stata già gestita");
+			}
+
+			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
+			_logger.LogInformation($"User {requesterId} cancelled swap request {swapRequestId}");
+			await _notificationService.NotifySwapRequestCancelledAsync(updated);
+
+			return SwapRequestDTO.FromSwapRequest(updated);
 		}
 
 		public async Task<IEnumerable<SwapRequestDTO>> GetForUser(Guid userId, UserRole role)
@@ -110,14 +137,18 @@ namespace Five68.Services
 			return (await _swapRequestFacade.GetForUserAsync(userId, seeAll)).Select(SwapRequestDTO.FromSwapRequest);
 		}
 
-		private async Task<SwapRequest> RequireCanRespond(Guid swapRequestId, Guid requesterId)
+		private async Task<SwapRequest> RequireCanAct(Guid swapRequestId, Guid requesterId, SwapRequestAction action)
 		{
 			SwapRequest request = await _swapRequestFacade.FindByIdAsync(swapRequestId) ?? throw new NotFoundException("Richiesta non trovata");
 			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
 
-			if (request.TargetEmployeeId != requesterId && requester.Role != UserRole.Admin)
+			Guid authorizedUserId = action == SwapRequestAction.Respond ? request.TargetEmployeeId : request.RequesterId;
+			if (authorizedUserId != requesterId && requester.Role != UserRole.Admin)
 			{
-				throw new ForbiddenException("Non hai i permessi per rispondere a questa richiesta");
+				string message = action == SwapRequestAction.Respond
+					? "Non hai i permessi per rispondere a questa richiesta"
+					: "Non hai i permessi per annullare questa richiesta";
+				throw new ForbiddenException(message);
 			}
 
 			return request;

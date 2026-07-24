@@ -60,12 +60,7 @@ namespace Five68.Facades
 		{
 			await using IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
 
-			int accepted = await _context.SwapRequests
-				.Where(x => x.Id == swapRequestId && x.Status == SwapRequestStatus.Pending)
-				.ExecuteUpdateAsync(s => s
-					.SetProperty(x => x.Status, SwapRequestStatus.Accepted)
-					.SetProperty(x => x.RespondedAt, DateTimeOffset.UtcNow));
-			if (accepted == 0)
+			if (!await TrySetStatusAsync(swapRequestId, SwapRequestStatus.Accepted))
 			{
 				return AcceptResult.AlreadyHandled;
 			}
@@ -86,15 +81,15 @@ namespace Five68.Facades
 			return AcceptResult.Success;
 		}
 
-		internal async Task<bool> TryRejectAsync(Guid swapRequestId)
+		internal async Task<bool> TrySetStatusAsync(Guid swapRequestId, SwapRequestStatus newStatus)
 		{
-			int rejected = await _context.SwapRequests
+			int updated = await _context.SwapRequests
 				.Where(x => x.Id == swapRequestId && x.Status == SwapRequestStatus.Pending)
 				.ExecuteUpdateAsync(s => s
-					.SetProperty(x => x.Status, SwapRequestStatus.Rejected)
+					.SetProperty(x => x.Status, newStatus)
 					.SetProperty(x => x.RespondedAt, DateTimeOffset.UtcNow));
 
-			return rejected > 0;
+			return updated > 0;
 		}
 
 		internal async Task DeletePendingByShiftAsync(Guid shiftId)
