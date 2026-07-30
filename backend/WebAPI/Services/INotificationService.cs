@@ -6,7 +6,7 @@ namespace Five68.Services
 	{
 		Task SendInviteAsync(string toEmail, string inviteLink);
 		Task NotifySwapRequestCreatedAsync(SwapRequest request);
-		Task NotifySwapRequestRejectedAsync(SwapRequest request);
+		Task NotifySwapRequestRespondedAsync(SwapRequest request);
 		Task NotifySwapRequestCancelledAsync(SwapRequest request);
 	}
 }

@@ -2,8 +2,6 @@ using Five68.Exceptions;
 using Five68.Facades;
 using Five68.Models;
 using Five68.Models.DTO;
-using System.IO.Compression;
-using System.Text;
 
 namespace Five68.Services
 {
@@ -58,10 +56,14 @@ namespace Five68.Services
 				}
 
 				Employee target = await _employeeFacade.FindByIdAsync(targetId) ?? throw new NotFoundException("Dipendente non trovato");
+				if (await _shiftFacade.FindByDateAndEmployeeAsync(shift.Date, targetId) is not null)
+				{
+					throw new EntityException($"{target.Name} {target.Surname} ha già un turno assegnato in questa data");
+				}
 
 				if (await _swapRequestFacade.FindPendingByShiftAndTargetAsync(shift.Id, targetId) is not null)
 				{
-					throw new EntityException($"Esiiste già una richiesta pendente per {target.Name} {target.Surname}");
+					throw new EntityException($"Esiste già una richiesta pendente per {target.Name} {target.Surname}");
 				}
 
 				toCreate.Add(new SwapRequest
@@ -75,7 +77,13 @@ namespace Five68.Services
 
 			await _swapRequestFacade.CreateRangeAsync(toCreate);
 
-			_logger.LogInformation($"User {requesterId} requested a shift swap on {shift.Date} for {toCreate.Count} colleague(s)");
+			// notify only after db save
+			foreach (SwapRequest r in toCreate)
+			{
+				await _notificationService.NotifySwapRequestCreatedAsync(r);
+				_logger.LogInformation($"User {requesterId} requested a shift swap on {shift.Date} for {r.TargetEmployeeId}");
+			}
+
 			return toCreate.Select(SwapRequestDTO.FromSwapRequest);
 		}
 
@@ -94,7 +102,9 @@ namespace Five68.Services
 				throw new EntityException("Il collega ha già un turno assegnato in questa data");
 			}
 
+			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
 			_logger.LogInformation($"User {requesterId} accepted swap request {swapRequestId}");
+			await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
 			return SwapRequestDTO.FromSwapRequest(await _swapRequestFacade.FindByIdAsync(swapRequestId));
 		}
@@ -110,7 +120,7 @@ namespace Five68.Services
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
 			_logger.LogInformation($"User {requesterId} rejected swap request {swapRequestId}");
-			await _notificationService.NotifySwapRequestRejectedAsync(updated);
+			await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
 			return SwapRequestDTO.FromSwapRequest(updated);
 		}
@@ -153,6 +163,5 @@ namespace Five68.Services
 
 			return request;
 		}
-
 	}
 }

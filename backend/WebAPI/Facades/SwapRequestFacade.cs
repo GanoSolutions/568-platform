@@ -1,7 +1,6 @@
 using Five68.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Win32.SafeHandles;
 
 namespace Five68.Facades
 {
@@ -35,19 +34,22 @@ namespace Five68.Facades
 
 		internal async Task<SwapRequest> FindByIdAsync(Guid id)
 		{
-			return await _context.SwapRequests.FirstOrDefaultAsync(x => x.Id == id);
+			// AsNoTracking: gli update in questa Facade passano sempre da ExecuteUpdateAsync
+			// (bypassa il change tracker), quindi una lettura tracciata rischierebbe di restituire
+			// uno stato stantio se la stessa entità era già stata caricata prima nello stesso scope.
+			return await _context.SwapRequests.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
 		}
 
 		internal async Task<SwapRequest> FindPendingByShiftAndTargetAsync(Guid shiftId, Guid targetEmployeeId)
 		{
-			return await _context.SwapRequests.FirstOrDefaultAsync(x => x.ShiftId == shiftId
+			return await _context.SwapRequests.AsNoTracking().FirstOrDefaultAsync(x => x.ShiftId == shiftId
 				&& x.TargetEmployeeId == targetEmployeeId
 				&& x.Status == SwapRequestStatus.Pending);
 		}
 
 		internal async Task<IEnumerable<SwapRequest>> GetForUserAsync(Guid userId, bool seeAll)
 		{
-			IQueryable<SwapRequest> query = _context.SwapRequests.OrderByDescending(x => x.CreatedAt);
+			IQueryable<SwapRequest> query = _context.SwapRequests.AsNoTracking().OrderByDescending(x => x.CreatedAt);
 
 			if (!seeAll)
 			{
@@ -77,6 +79,13 @@ namespace Five68.Facades
 				.Where(x => x.Id == shiftId)
 				.ExecuteUpdateAsync(s => s.SetProperty(x => x.EmployeeId, targetEmployeeId));
 
+			await _context.SwapRequests
+				.Where(x => x.ShiftId == shiftId
+					&& x.Id != swapRequestId
+					&& x.Status == SwapRequestStatus.Pending)
+				.ExecuteUpdateAsync(s => s
+					.SetProperty(x => x.Status, SwapRequestStatus.Cancelled)
+					.SetProperty(x => x.RespondedAt, DateTimeOffset.UtcNow));
 			await transaction.CommitAsync();
 			return AcceptResult.Success;
 		}

@@ -111,5 +111,25 @@ namespace Five68.Controllers
 			string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			return Guid.TryParse(requesterId, out Guid id) ? id : Guid.Empty;
 		}
+
+		/// <summary>
+		/// Cancels a pending swap request. Only the original requester or an Admin can cancel it.
+		/// </summary>
+		/// <response code="200">Swap request cancelled.</response>
+		/// <response code="401">Caller is not authenticated.</response>
+		/// <response code="403">Caller is neither the requester nor an Admin.</response>
+		/// <response code="404">Swap request not found.</response>
+		/// <response code="422">The request was already handled.</response>
+		[HttpPost("{id:guid}/cancel")]
+		public async Task<IActionResult> Cancel(Guid id)
+		{
+			Guid requesterId = GetRequesterId();
+			if (requesterId == Guid.Empty)
+			{
+				return Unauthorized();
+			}
+
+			return Ok(await _swapRequestService.Cancel(id, requesterId));
+		}
 	}
 }
