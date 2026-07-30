@@ -28,75 +28,9 @@ public class TestShiftController
     {
         factory_ = factory;
         client_ = factory.CreateClient();
-        SeedUser(AdminEmail, UserRole.Admin);
-        SeedUser(ManagerEmail, UserRole.Manager);
-        SeedUser(EmployeeEmail, UserRole.Employee);
-    }
-
-    private void SeedUser(string email, UserRole role)
-    {
-        using IServiceScope scope = factory_.Services.CreateScope();
-        Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-
-        if (db.Users.Any(u => u.Email == email))
-            return;
-
-        db.Users.Add(new User
-        {
-            Id = Guid.NewGuid(),
-            Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Password, workFactor: 4),
-            Role = role,
-            Status = UserStatus.Active,
-        });
-        db.SaveChanges();
-    }
-
-    // Crea un utente Employee completo di riga t_employees, cosi' puo' essere
-    // usato come EmployeeId target di uno Shift (FK richiesta).
-    private Guid CreateEmployee(string email)
-    {
-        using IServiceScope scope = factory_.Services.CreateScope();
-        Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-
-        Guid id = Guid.NewGuid();
-        db.Users.Add(new User
-        {
-            Id = id,
-            Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Password, workFactor: 4),
-            Role = UserRole.Employee,
-            Status = UserStatus.Active,
-        });
-        db.Employees.Add(new Employee
-        {
-            UserId = id,
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = $"FC{Guid.NewGuid():N}"[..16],
-            Phone = "3331234567",
-        });
-        db.SaveChanges();
-        return id;
-    }
-
-    private Guid SeedShift(Guid employeeId, DateOnly date, TimeOnly start, TimeSpan duration, Guid createdBy)
-    {
-        using IServiceScope scope = factory_.Services.CreateScope();
-        Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-
-        Guid id = Guid.NewGuid();
-        db.Shifts.Add(new Shift
-        {
-            Id = id,
-            Date = date,
-            EmployeeId = employeeId,
-            StartTime = start,
-            Duration = duration,
-            CreatedBy = createdBy,
-        });
-        db.SaveChanges();
-        return id;
+        factory_.SeedUser(AdminEmail, UserRole.Admin);
+        factory_.SeedUser(ManagerEmail, UserRole.Manager);
+        factory_.SeedUser(EmployeeEmail, UserRole.Employee);
     }
 
     private void SeedClosedDay(DateOnly date, Guid createdBy)
@@ -108,34 +42,14 @@ public class TestShiftController
         db.SaveChanges();
     }
 
-    private async Task AuthorizeAsAsync(string email)
-    {
-        using (IServiceScope scope = factory_.Services.CreateScope())
-        {
-            Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-            User user = db.Users.First(u => u.Email == email);
-            user.Status = UserStatus.Active;
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(Password, workFactor: 4);
-            db.SaveChanges();
-        }
+    private Task AuthorizeAsAsync(string email) => client_.AuthorizeAsAsync(factory_, email);
 
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
-        {
-            Email = email,
-            Password = Password,
-        });
-        string body = await response.Content.ReadAsStringAsync();
-        Assert.True(response.IsSuccessStatusCode, $"Login failed for {email}: {response.StatusCode} — {body}");
-        Tokens? tokens = JsonSerializer.Deserialize<Tokens>(body, _jsonOptions);
-        client_.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens!.AccessToken);
-    }
+    private Guid CreateEmployee(string email) => factory_.CreateEmployee(email);
 
-    private Guid GetUserId(string email)
-    {
-        using IServiceScope scope = factory_.Services.CreateScope();
-        Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-        return db.Users.First(u => u.Email == email).Id;
-    }
+    private Guid SeedShift(Guid employeeId, DateOnly date, TimeOnly start, TimeSpan duration, Guid createdBy)
+        => factory_.SeedShift(employeeId, date, start, duration, createdBy);
+
+    private Guid GetUserId(string email) => factory_.GetUserId(email);
 
     private bool ShiftExists(Guid id)
     {
@@ -167,6 +81,45 @@ public class TestShiftController
         dto.StartTime.Should().Be(start);
         dto.Duration.Should().Be(duration);
         dto.CreatedBy.Should().Be(adminId);
+    }
+
+    [Fact]
+    public async Task GetById_JustCreatedShift_UpdatedAtIsPresent()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+        Guid adminId = GetUserId(AdminEmail);
+        Guid employeeId = CreateEmployee("sa-getbyid-updatedat@five68.com");
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 1, 11), new TimeOnly(9, 0), TimeSpan.FromHours(8), adminId);
+
+        HttpResponseMessage response = await client_.GetAsync($"/shift/{shiftId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        ShiftDTO? dto = await response.Content.ReadFromJsonAsync<ShiftDTO>();
+        dto!.UpdatedAt.Should().NotBe(default);
+    }
+
+    [Fact]
+    public async Task GetById_AfterUpdate_UpdatedAtIsBumped()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+        Guid adminId = GetUserId(AdminEmail);
+        Guid employeeId = CreateEmployee("sa-getbyid-updatedat2@five68.com");
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2031, 1, 12), new TimeOnly(9, 0), TimeSpan.FromHours(8), adminId);
+
+        ShiftDTO? original = await (await client_.GetAsync($"/shift/{shiftId}")).Content.ReadFromJsonAsync<ShiftDTO>();
+
+        await AuthorizeAsAsync(ManagerEmail);
+        HttpResponseMessage updateResponse = await client_.PutAsJsonAsync($"/shift/{shiftId}", new ShiftUpdate
+        {
+            StartTime = new TimeOnly(10, 0),
+            Duration = TimeSpan.FromHours(8),
+        });
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        HttpResponseMessage getResponse = await client_.GetAsync($"/shift/{shiftId}");
+        ShiftDTO? updated = await getResponse.Content.ReadFromJsonAsync<ShiftDTO>();
+
+        updated!.UpdatedAt.Should().BeAfter(original!.UpdatedAt);
     }
 
     [Fact]
