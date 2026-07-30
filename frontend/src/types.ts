@@ -46,7 +46,8 @@ export interface SwapRequest {
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled'
   createdAt: string
   respondedAt: string | null
+  /** Data del turno (YYYY-MM-DD), risolta lato client via shiftApi.getById. */
   workDate: string
-  requester: { id: string; name: string; color: string } | null
-  target: { id: string; name: string; color: string } | null
+  /** updatedAt del turno collegato — confrontato con createdAt per segnalare se il turno è cambiato dopo la richiesta. */
+  shiftUpdatedAt: string
 }
