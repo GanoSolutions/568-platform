@@ -11,18 +11,13 @@ public class Five68WebAppFactory : WebApplicationFactory<Program>, IAsyncLifetim
 {
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
-		builder.ConfigureAppConfiguration(config =>
-		{
-			config.AddInMemoryCollection(new Dictionary<string, string?>
-			{
-				["AppSettings:Crypto:WorkFactor"] = "4",
-				["ConnectionStrings:DefaultConnection"] = "Host=Five68-db;Port=5432;Database=Five68-test;Username=postgres;Password=postgres",
-			});
-		});
-
 		builder.ConfigureLogging(logging =>
 		{
-			logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+			// Silenzia il rumore Debug/Info del framework (host, AspNetCore, EF Core) durante i
+			// test, ma lascia visibili gli Information dei nostri Service/Facade/Controller
+			// (namespace Five68), utili per capire cosa succede in un test che fallisce.
+			logging.SetMinimumLevel(LogLevel.Warning);
+			logging.AddFilter("Five68", LogLevel.Information);
 		});
 	}
 

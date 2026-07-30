@@ -52,6 +52,8 @@ services:
       dockerfile: tests/Dockerfile
       args:
         TEST_PROJECT: Five68.IntegrationTests
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Testing
     depends_on:
       Five68-db:
         condition: service_healthy

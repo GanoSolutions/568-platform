@@ -9,6 +9,7 @@ namespace Five68.Models.DTO
 		public TimeSpan Duration { get; set; }
 		public Guid CreatedBy { get; set; }
 		public DateTimeOffset CreatedAt { get; set; }
+		public DateTimeOffset UpdatedAt { get; set; }
 
 		public static ShiftDTO FromShift(Shift shift)
 		{
@@ -23,6 +24,7 @@ namespace Five68.Models.DTO
 				Duration = shift.Duration,
 				CreatedBy = shift.CreatedBy,
 				CreatedAt = shift.CreatedAt,
+				UpdatedAt = shift.UpdatedAt
 			};
 
 		}
