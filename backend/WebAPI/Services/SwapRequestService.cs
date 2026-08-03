@@ -71,7 +71,8 @@ namespace Five68.Services
 					Id = Guid.NewGuid(),
 					ShiftId = shift.Id,
 					RequesterId = requesterId,
-					TargetEmployeeId = targetId
+					TargetEmployeeId = targetId,
+					Shift = shift,
 				});
 			}
 

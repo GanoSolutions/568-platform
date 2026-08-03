@@ -37,7 +37,7 @@ namespace Five68.Facades
 			// AsNoTracking: gli update in questa Facade passano sempre da ExecuteUpdateAsync
 			// (bypassa il change tracker), quindi una lettura tracciata rischierebbe di restituire
 			// uno stato stantio se la stessa entità era già stata caricata prima nello stesso scope.
-			return await _context.SwapRequests.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+			return await _context.SwapRequests.AsNoTracking().Include(x => x.Shift).FirstOrDefaultAsync(x => x.Id == id);
 		}
 
 		internal async Task<SwapRequest> FindPendingByShiftAndTargetAsync(Guid shiftId, Guid targetEmployeeId)
@@ -49,7 +49,10 @@ namespace Five68.Facades
 
 		internal async Task<IEnumerable<SwapRequest>> GetForUserAsync(Guid userId, bool seeAll)
 		{
-			IQueryable<SwapRequest> query = _context.SwapRequests.AsNoTracking().OrderByDescending(x => x.CreatedAt);
+			IQueryable<SwapRequest> query = _context.SwapRequests
+				.AsNoTracking()
+				.Include(x => x.Shift)
+				.OrderByDescending(x => x.CreatedAt);
 
 			if (!seeAll)
 			{

@@ -5,7 +5,7 @@ namespace Five68.Models.DTO
 	public class SwapRequestDTO
 	{
 		public Guid Id { get; set; }
-		public Guid ShiftId { get; set; }
+		public ShiftDTO Shift { get; set; }
 		public Guid RequesterId { get; set; }
 		public Guid TargetEmployeeId { get; set; }
 		public SwapRequestStatus Status { get; set; }
@@ -22,7 +22,7 @@ namespace Five68.Models.DTO
 			return new SwapRequestDTO
 			{
 				Id = request.Id,
-				ShiftId = request.ShiftId,
+				Shift = ShiftDTO.FromShift(request.Shift),
 				RequesterId = request.RequesterId,
 				TargetEmployeeId = request.TargetEmployeeId,
 				Status = request.Status,
