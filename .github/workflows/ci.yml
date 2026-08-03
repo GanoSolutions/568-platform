@@ -27,10 +27,10 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
-              - 'docker-compose.yml'
+              - '.github/workflows/ci.yml'
             frontend:
               - 'frontend/**'
-              - 'docker-compose.yml'
+              - '.github/workflows/ci.yml'
   backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
@@ -40,7 +40,7 @@ jobs:
 
       - name: Lint
         working-directory: backend
-        run: dotnet format Five68Platform.slnx --verify-no-changs
+        run: dotnet format Five68Platform.slnx --verify-no-changes
 
       - name: Build solution (analyzer warnings visible in log)
         working-directory: backend

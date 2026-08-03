@@ -4,7 +4,6 @@ using Five68.Models;
 using Five68.Models.Authentication;
 using Five68.Models.DTO;
 using Five68.Utils;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Five68.Services
 {

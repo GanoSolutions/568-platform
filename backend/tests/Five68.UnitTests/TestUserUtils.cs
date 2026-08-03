@@ -1,4 +1,3 @@
-﻿using BCrypt.Net;
 using Easy_Password_Validator;
 using Easy_Password_Validator.Models;
 using Five68.Models;
@@ -13,7 +12,7 @@ public class TestUserUtils
 
 	public TestUserUtils()
 	{
-		var settings = Options.Create(new AppSettings
+		IOptions<AppSettings> settings = Options.Create(new AppSettings
 		{
 			Crypto = new CryptoSettings { WorkFactor = 4 },
 			PasswordRequirements = new PasswordRequirements
@@ -25,7 +24,7 @@ public class TestUserUtils
 			}
 		});
 
-		var validator = new PasswordValidatorService(settings.Value.PasswordRequirements);
+		PasswordValidatorService validator = new PasswordValidatorService(settings.Value.PasswordRequirements);
 		sut_ = new UserUtils(settings, validator);
 	}
 
@@ -34,9 +33,9 @@ public class TestUserUtils
 	[Fact]
 	public void HashAndCheckPassword_ValidPassword_ReturnsHashVerifiableByBCrypt()
 	{
-		var password = "ValidP@ss1!";
+		string password = "ValidP@ss1!";
 
-		var hash = sut_.HashAndCheckPassword(password);
+		string hash = sut_.HashAndCheckPassword(password);
 
 		BCrypt.Net.BCrypt.Verify(password, hash).Should().BeTrue();
 	}
@@ -45,8 +44,8 @@ public class TestUserUtils
 	public void HashAndCheckPassword_SamePasswordTwice_ReturnsDifferentHashes()
 	{
 		// BCrypt generates different salt each time
-		var hash1 = sut_.HashAndCheckPassword("ValidP@ss1!");
-		var hash2 = sut_.HashAndCheckPassword("ValidP@ss1!");
+		string hash1 = sut_.HashAndCheckPassword("ValidP@ss1!");
+		string hash2 = sut_.HashAndCheckPassword("ValidP@ss1!");
 
 		hash1.Should().NotBe(hash2);
 	}
@@ -64,8 +63,8 @@ public class TestUserUtils
 	[Fact]
 	public void CheckPassword_CorrectPassword_ReturnsTrue()
 	{
-		var password = "ValidP@ss1!";
-		var user = new User
+		string password = "ValidP@ss1!";
+		User user = new User
 		{
 			Id = Guid.NewGuid(),
 			Email = "test@five68.com",
@@ -79,7 +78,7 @@ public class TestUserUtils
 	[Fact]
 	public void CheckPassword_WrongPassword_ReturnsFalse()
 	{
-		var user = new User
+		User user = new()
 		{
 			Id = Guid.NewGuid(),
 			Email = "test@five68.com",
@@ -93,7 +92,7 @@ public class TestUserUtils
 	[Fact]
 	public void CheckPassword_NullHash_ThrowsSaltParseException()
 	{
-		var user = new User
+		User user = new()
 		{
 			Id = Guid.NewGuid(),
 			Email = "test@five68.com",

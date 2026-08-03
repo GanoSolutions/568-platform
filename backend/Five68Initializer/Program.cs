@@ -1,18 +1,13 @@
-﻿using System.IO;
-using System.Linq;
+using Five68.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using Five68;
-using Five68.Models;
-using System.Net;
 
 namespace Five68.Initializer
 {
 	internal class Program
 	{
-		static void Main(string[] args)
+		private static void Main(string[] args)
 		{
 			AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 			Console.WriteLine("Hello, World!");

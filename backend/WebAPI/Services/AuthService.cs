@@ -2,8 +2,6 @@ using Five68.Exceptions;
 using Five68.Facades;
 using Five68.Models;
 using Five68.Models.Authentication;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using System.Security.Claims;
 
 namespace Five68.Services

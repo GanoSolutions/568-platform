@@ -1,6 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Five68.Models;
 using Five68.Models.Authentication;
+using Microsoft.EntityFrameworkCore;
 
 namespace Five68
 {

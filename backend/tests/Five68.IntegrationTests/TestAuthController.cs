@@ -1,9 +1,9 @@
-using System.Net;
-using System.Net.Http.Json;
 using Five68.Models;
 using Five68.Models.Authentication;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net;
+using System.Net.Http.Json;
 
 namespace Five68.IntegrationTests;
 
@@ -25,8 +25,8 @@ public class TestAuthController
 
 	private void SeedUser(string email, string password)
 	{
-		using var scope = factory_.Services.CreateScope();
-		var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+		using IServiceScope scope = factory_.Services.CreateScope();
+		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 
 		if (db.Users.Any(u => u.Email == email))
 			return;
@@ -45,7 +45,7 @@ public class TestAuthController
 	[Fact]
 	public async Task Login_ValidCredentials_Returns200WithTokens()
 	{
-		var response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
 		{
 			Email = TestEmail,
 			Password = TestPassword
@@ -53,7 +53,7 @@ public class TestAuthController
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-		var tokens = await response.Content.ReadFromJsonAsync<Tokens>();
+		Tokens? tokens = await response.Content.ReadFromJsonAsync<Tokens>();
 		tokens!.AccessToken.Should().NotBeNullOrEmpty();
 		tokens.RefreshToken.Should().NotBeNullOrEmpty();
 	}
@@ -61,7 +61,7 @@ public class TestAuthController
 	[Fact]
 	public async Task Login_WrongPassword_Returns401()
 	{
-		var response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
 		{
 			Email = TestEmail,
 			Password = "WrongP@ss1!"
@@ -73,7 +73,7 @@ public class TestAuthController
 	[Fact]
 	public async Task Login_EmptyEmail_Returns400()
 	{
-		var response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
 		{
 			Email = "",
 			Password = TestPassword
@@ -85,7 +85,7 @@ public class TestAuthController
 	[Fact]
 	public async Task Login_UnknownEmail_Returns401()
 	{
-		var response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
 		{
 			Email = "nobody@five68.com",
 			Password = TestPassword
@@ -97,10 +97,10 @@ public class TestAuthController
 	[Fact]
 	public async Task Logout_ValidToken_Returns200()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
 		client_.DefaultRequestHeaders.Authorization = new("Bearer", tokens.AccessToken);
-		var response = await client_.PostAsync("/auth/logout", null);
+		HttpResponseMessage response = await client_.PostAsync("/auth/logout", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 	}
@@ -108,13 +108,13 @@ public class TestAuthController
 	[Fact]
 	public async Task Logout_ValidToken_DeletesRefreshToken()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
 		client_.DefaultRequestHeaders.Authorization = new("Bearer", tokens.AccessToken);
 		await client_.PostAsync("/auth/logout", null);
 
-		using var scope = factory_.Services.CreateScope();
-		var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+		using IServiceScope scope = factory_.Services.CreateScope();
+		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		db.RefreshTokens.Any(t => t.Email == TestEmail).Should().BeFalse();
 	}
 
@@ -122,7 +122,7 @@ public class TestAuthController
 	public async Task Logout_NoToken_Returns401()
 	{
 		client_.DefaultRequestHeaders.Authorization = null;
-		var response = await client_.PostAsync("/auth/logout", null);
+		HttpResponseMessage response = await client_.PostAsync("/auth/logout", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -131,7 +131,7 @@ public class TestAuthController
 	public async Task Logout_InvalidToken_Returns401()
 	{
 		client_.DefaultRequestHeaders.Authorization = new("Bearer", "this.is.not.a.valid.token");
-		var response = await client_.PostAsync("/auth/logout", null);
+		HttpResponseMessage response = await client_.PostAsync("/auth/logout", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -139,12 +139,12 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_ValidTokens_Returns200WithNewTokens()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", tokens);
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", tokens);
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		var newTokens = await response.Content.ReadFromJsonAsync<Tokens>();
+		Tokens? newTokens = await response.Content.ReadFromJsonAsync<Tokens>();
 		newTokens!.AccessToken.Should().NotBeNullOrEmpty();
 		newTokens!.RefreshToken.Should().NotBeNullOrEmpty();
 	}
@@ -152,10 +152,10 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_ValidTokens_OldRefreshTokenIsInvalidated()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 		await client_.PostAsJsonAsync("/auth/refresh", tokens);
 
-		var replayResponse = await client_.PostAsJsonAsync("/auth/refresh", tokens);
+		HttpResponseMessage replayResponse = await client_.PostAsJsonAsync("/auth/refresh", tokens);
 
 		replayResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -163,11 +163,11 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_ValidTokens_ReturnsRotatedTokens()
 	{
-		var original = await LoginAsync(TestEmail, TestPassword);
+		Tokens original = await LoginAsync(TestEmail, TestPassword);
 
 		await Task.Delay(TimeSpan.FromSeconds(1));
-		var response = await client_.PostAsJsonAsync("/auth/refresh", original);
-		var rotated = await response.Content.ReadFromJsonAsync<Tokens>();
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", original);
+		Tokens? rotated = await response.Content.ReadFromJsonAsync<Tokens>();
 
 		rotated!.AccessToken.Should().NotBe(original.AccessToken);
 		rotated.RefreshToken.Should().NotBe(original.RefreshToken);
@@ -176,9 +176,9 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_WrongRefreshToken_Returns401()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
 		{
 			AccessToken = tokens.AccessToken,
 			RefreshToken = "this-is-not-the-right-refresh-token"
@@ -190,9 +190,9 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_InvalidAccessToken_Returns401()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
 		{
 			AccessToken = "this.is.not.a.valid.jwt",
 			RefreshToken = tokens.RefreshToken
@@ -204,17 +204,17 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_ExpiredRefreshToken_Returns401()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		using (var scope = factory_.Services.CreateScope())
+		using (IServiceScope scope = factory_.Services.CreateScope())
 		{
-			var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-			var stored = db.RefreshTokens.First(t => t.Email == TestEmail);
+			Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+			UserRefreshTokens stored = db.RefreshTokens.First(t => t.Email == TestEmail);
 			stored.ExpirationDate = DateTime.UtcNow.AddDays(-1);
 			db.SaveChanges();
 		}
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", tokens);
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", tokens);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -222,9 +222,9 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_EmptyAccessToken_Returns401()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
 		{
 			AccessToken = "",
 			RefreshToken = tokens.RefreshToken
@@ -236,9 +236,9 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_EmptyRefreshToken_Returns401()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", new Tokens
 		{
 			AccessToken = tokens.AccessToken,
 			RefreshToken = ""
@@ -250,9 +250,9 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_MissingAccessToken_Returns400()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", new
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", new
 		{
 			RefreshToken = tokens.RefreshToken
 		});
@@ -263,9 +263,9 @@ public class TestAuthController
 	[Fact]
 	public async Task Refresh_MissingRefreshToken_Returns400()
 	{
-		var tokens = await LoginAsync(TestEmail, TestPassword);
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
 
-		var response = await client_.PostAsJsonAsync("/auth/refresh", new
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/refresh", new
 		{
 			AccessToken = tokens.AccessToken
 		});
@@ -275,7 +275,7 @@ public class TestAuthController
 
 	private async Task<Tokens> LoginAsync(string email, string password)
 	{
-		var response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
+		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
 		{
 			Email = email,
 			Password = password

@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Authorization;
-using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
-using Microsoft.AspNetCore.Mvc;
-using Five68.Services;
 using Five68.Models.DTO;
+using Five68.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
 namespace Five68.Controllers
 {
