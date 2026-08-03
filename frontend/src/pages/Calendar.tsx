@@ -26,8 +26,9 @@ export default function Calendar() {
 		error: calendarError,
 	} = useCalendar();
 	const { employees: allEmployees, loading: employeesLoading, error: employeesError } = useEmployees();
-	// I turni si assegnano a manager/dipendenti, non ad account admin puri.
-	const employees = allEmployees.filter(e => e.role !== 'admin');
+	// I turni si assegnano a manager/dipendenti attivi: escludiamo gli account
+	// admin puri, quelli non ancora invitati e quelli disabilitati (fine contratto).
+	const employees = allEmployees.filter(e => e.role !== 'admin' && e.invited && !e.disabled);
 	const loading = calendarLoading || employeesLoading;
 	const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 	const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>(undefined);

@@ -12,6 +12,8 @@ export interface EmployeeDetail extends Employee {
   contractEnd: string
   invited: boolean
   firstLoginCompleted: boolean
+  /** Account disabilitato (es. fine contratto) — non selezionabile per nuovi turni. */
+  disabled: boolean
 }
 
 export interface ShiftEmployee {
