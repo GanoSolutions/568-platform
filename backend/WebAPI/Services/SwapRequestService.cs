@@ -96,6 +96,7 @@ namespace Five68.Services
 		public async Task<SwapRequestDTO> Accept(Guid swapRequestId, Guid requesterId)
 		{
 			SwapRequest request = await RequireCanAct(swapRequestId, requesterId, SwapRequestAction.Respond);
+
 			SwapRequestFacade.AcceptResult result = await _swapRequestFacade.TryAcceptAsync(swapRequestId, request.ShiftId, request.TargetEmployeeId);
 
 			if (result == SwapRequestFacade.AcceptResult.AlreadyHandled)
@@ -157,6 +158,11 @@ namespace Five68.Services
 		{
 			SwapRequest request = await _swapRequestFacade.FindByIdAsync(swapRequestId) ?? throw new NotFoundException("Richiesta non trovata");
 			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
+
+			if (action == SwapRequestAction.Respond && request.Shift.Date < DateOnly.FromDateTime(DateTime.UtcNow))
+			{
+				throw new EntityException("Non puoi rispondere a una richiesta di cambio per un turno passato");
+			}
 
 			Guid authorizedUserId = action == SwapRequestAction.Respond ? request.TargetEmployeeId : request.RequesterId;
 			if (authorizedUserId != requesterId && requester.Role != UserRole.Admin)
