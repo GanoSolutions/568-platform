@@ -271,3 +271,8 @@ dotnet_diagnostic.IDE0290.severity = none
 dotnet_diagnostic.IDE0028.severity = none
 dotnet_diagnostic.IDE0305.severity = none
 dotnet_diagnostic.IDE0058.severity = none
+
+# Test method names follow the MethodUnderTest_Scenario_ExpectedResult convention,
+# which relies on underscores for readability — CA1707 only applies to test code.
+[backend/tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
