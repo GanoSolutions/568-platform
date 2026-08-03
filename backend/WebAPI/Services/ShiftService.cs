@@ -17,11 +17,13 @@ namespace Five68.Services
 			ShiftFacade shiftFacade,
 			UserFacade userFacade,
 			EmployeeFacade employeeFacade,
+			IShiftNotificationService notificationService,
 			ILogger<ShiftService> logger)
 		{
 			_shiftFacade = shiftFacade;
 			_userFacade = userFacade;
 			_employeeFacade = employeeFacade;
+			_notificationService = notificationService;
 			_logger = logger;
 		}
 
