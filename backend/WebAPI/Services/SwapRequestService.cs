@@ -45,6 +45,11 @@ namespace Five68.Services
 				throw new ForbiddenException("Non puoi richiedere il cambio di un turno non tuo");
 			}
 
+			if (shift.Date < DateOnly.FromDateTime(DateTime.UtcNow))
+			{
+				throw new EntityException("Non puoi richiedere il cambio di un turno passato");
+			}
+
 			List<Guid> targetIds = model.TargetEmployeeIds.Distinct().ToList();
 			List<SwapRequest> toCreate = [];
 
