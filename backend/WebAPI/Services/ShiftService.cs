@@ -65,7 +65,7 @@ namespace Five68.Services
 				CreatedBy = requesterId,
 			});
 
-			_logger.LogInformation($"User {requester.Email} created a {created.Duration} hours shift on {created.Date} for employee {created.Employee.Name} {created.Employee.Surname} starting at {created.StartTime}");
+			_logger.LogInformation($"User {requester.Email} created a {created.Duration} hours shift on {created.Date} for employee {created.EmployeeId} starting at {created.StartTime}");
 			return ShiftDTO.FromShift(created);
 		}
 

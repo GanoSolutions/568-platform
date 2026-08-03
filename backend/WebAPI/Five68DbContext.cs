@@ -30,7 +30,7 @@ namespace Five68
 				e.HasIndex(x => x.Email).IsUnique();
 				e.HasIndex(x => x.InviteToken).IsUnique();
 				e.HasOne(x => x.Employee)
-					.WithOne(x => x.User)
+					.WithOne()
 					.HasForeignKey<Employee>(x => x.UserId)
 					.OnDelete(DeleteBehavior.Cascade);
 			});
@@ -50,7 +50,7 @@ namespace Five68
 				e.Property(x => x.Id).ValueGeneratedNever();
 				e.HasIndex(x => x.Date).IsUnique();
 
-				e.HasOne(x => x.Creator)
+				e.HasOne<User>()
 					.WithMany()
 					.HasForeignKey(x => x.CreatedBy)
 					.OnDelete(DeleteBehavior.SetNull);
@@ -63,12 +63,12 @@ namespace Five68
 				e.Property(x => x.Id).ValueGeneratedNever();
 				e.HasIndex(x => new { x.Date, x.EmployeeId }).IsUnique();
 
-				e.HasOne(x => x.Creator)
+				e.HasOne<User>()
 					.WithMany()
 					.HasForeignKey(x => x.CreatedBy)
 					.OnDelete(DeleteBehavior.SetNull);
 
-				e.HasOne(x => x.Employee)
+				e.HasOne<Employee>()
 					.WithMany()
 					.HasForeignKey(x => x.EmployeeId)
 					.OnDelete(DeleteBehavior.Cascade);
@@ -86,12 +86,12 @@ namespace Five68
 					.HasForeignKey(x => x.ShiftId)
 					.OnDelete(DeleteBehavior.Cascade);
 
-				e.HasOne(x => x.Requester)
+				e.HasOne<User>()
 					.WithMany()
 					.HasForeignKey(x => x.RequesterId)
 					.OnDelete(DeleteBehavior.Cascade);
 
-				e.HasOne(x => x.TargetEmployee)
+				e.HasOne<User>()
 					.WithMany()
 				 	.HasForeignKey(x => x.TargetEmployeeId)
 					.OnDelete(DeleteBehavior.Cascade);
