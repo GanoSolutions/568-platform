@@ -38,12 +38,7 @@ public class SwapRequestController : Controller
 		}
 
 		User user = await _userService.Get(requesterId);
-		if (user is null)
-		{
-			return Unauthorized();
-		}
-
-		return Ok(await _swapRequestService.GetForUser(requesterId, user.Role));
+		return user is null ? Unauthorized() : Ok(await _swapRequestService.GetForUser(requesterId, user.Role));
 	}
 
 	/// <summary>
@@ -58,12 +53,7 @@ public class SwapRequestController : Controller
 	public async Task<IActionResult> Create([FromBody] SwapRequestCreate model)
 	{
 		Guid requesterId = GetRequesterId();
-		if (requesterId == Guid.Empty)
-		{
-			return Unauthorized();
-		}
-
-		return Created(string.Empty, await _swapRequestService.Create(model, requesterId));
+		return requesterId == Guid.Empty ? Unauthorized() : Created(string.Empty, await _swapRequestService.Create(model, requesterId));
 	}
 
 	/// <summary>
@@ -78,12 +68,7 @@ public class SwapRequestController : Controller
 	public async Task<IActionResult> Accept(Guid id)
 	{
 		Guid requesterId = GetRequesterId();
-		if (requesterId == Guid.Empty)
-		{
-			return Unauthorized();
-		}
-
-		return Ok(await _swapRequestService.Accept(id, requesterId));
+		return requesterId == Guid.Empty ? Unauthorized() : Ok(await _swapRequestService.Accept(id, requesterId));
 	}
 
 	/// <summary>
@@ -98,12 +83,7 @@ public class SwapRequestController : Controller
 	public async Task<IActionResult> Reject(Guid id)
 	{
 		Guid requesterId = GetRequesterId();
-		if (requesterId == Guid.Empty)
-		{
-			return Unauthorized();
-		}
-
-		return Ok(await _swapRequestService.Reject(id, requesterId));
+		return requesterId == Guid.Empty ? Unauthorized() : Ok(await _swapRequestService.Reject(id, requesterId));
 	}
 
 	private Guid GetRequesterId()
@@ -124,11 +104,6 @@ public class SwapRequestController : Controller
 	public async Task<IActionResult> Cancel(Guid id)
 	{
 		Guid requesterId = GetRequesterId();
-		if (requesterId == Guid.Empty)
-		{
-			return Unauthorized();
-		}
-
-		return Ok(await _swapRequestService.Cancel(id, requesterId));
+		return requesterId == Guid.Empty ? Unauthorized() : Ok(await _swapRequestService.Cancel(id, requesterId));
 	}
 }

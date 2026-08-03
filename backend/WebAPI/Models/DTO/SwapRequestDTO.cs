@@ -14,21 +14,18 @@ public class SwapRequestDTO
 
 	public static SwapRequestDTO FromSwapRequest(SwapRequest request)
 	{
-		if (request is null)
-		{
-			return null;
-		}
-
-		return new SwapRequestDTO
-		{
-			Id = request.Id,
-			ShiftId = request.ShiftId,
-			RequesterId = request.RequesterId,
-			TargetEmployeeId = request.TargetEmployeeId,
-			Status = request.Status,
-			CreatedAt = request.CreatedAt,
-			RespondedAt = request.RespondedAt,
-		};
+		return request is null
+			? null
+			: new SwapRequestDTO
+			{
+				Id = request.Id,
+				ShiftId = request.ShiftId,
+				RequesterId = request.RequesterId,
+				TargetEmployeeId = request.TargetEmployeeId,
+				Status = request.Status,
+				CreatedAt = request.CreatedAt,
+				RespondedAt = request.RespondedAt,
+			};
 	}
 }
 

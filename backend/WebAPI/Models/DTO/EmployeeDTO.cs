@@ -11,19 +11,16 @@ public class EmployeeDTO
 
 	public static EmployeeDTO FromEmployee(Employee emp)
 	{
-		if (emp is null)
-		{
-			return null;
-		}
-
-		return new EmployeeDTO
-		{
-			Name = emp.Name,
-			Surname = emp.Surname,
-			FiscalCode = emp.FiscalCode,
-			Phone = emp.Phone,
-			ContractEnd = emp.ContractEnd,
-			Color = emp.Color,
-		};
+		return emp is null
+			? null
+			: new EmployeeDTO
+			{
+				Name = emp.Name,
+				Surname = emp.Surname,
+				FiscalCode = emp.FiscalCode,
+				Phone = emp.Phone,
+				ContractEnd = emp.ContractEnd,
+				Color = emp.Color,
+			};
 	}
 }

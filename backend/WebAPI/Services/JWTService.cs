@@ -84,12 +84,9 @@ public class JwtService
 		try
 		{
 			ClaimsPrincipal principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
-			if (securityToken is not JwtSecurityToken jwtToken || !jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-			{
-				throw new UnauthorizedException("Token non valido");
-			}
-
-			return principal;
+			return securityToken is not JwtSecurityToken jwtToken || !jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase)
+				? throw new UnauthorizedException("Token non valido")
+				: principal;
 		}
 		catch (SecurityTokenException ex)
 		{

@@ -12,19 +12,16 @@ public class UserDTO
 
 	public static UserDTO FromUser(User user)
 	{
-		if (user is null)
-		{
-			return null;
-		}
-
-		return new UserDTO
-		{
-			Id = user.Id,
-			Email = user.Email,
-			Role = user.Role,
-			Status = user.Status,
-			CreatedAt = user.CreatedAt,
-			Employee = EmployeeDTO.FromEmployee(user.Employee)
-		};
+		return user is null
+			? null
+			: new UserDTO
+			{
+				Id = user.Id,
+				Email = user.Email,
+				Role = user.Role,
+				Status = user.Status,
+				CreatedAt = user.CreatedAt,
+				Employee = EmployeeDTO.FromEmployee(user.Employee)
+			};
 	}
 }

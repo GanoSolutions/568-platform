@@ -31,12 +31,9 @@ public class ShiftService
 
 	public async Task<IEnumerable<ShiftDTO>> GetByDateRange(DateOnly start, DateOnly end)
 	{
-		if (end < start)
-		{
-			throw new EntityException("La data di fine deve essere successiva alla data di inizio");
-		}
-
-		return (await _shiftFacade.GetByDateRangeAsync(start, end)).Select(ShiftDTO.FromShift);
+		return end < start
+			? throw new EntityException("La data di fine deve essere successiva alla data di inizio")
+			: (await _shiftFacade.GetByDateRangeAsync(start, end)).Select(ShiftDTO.FromShift);
 	}
 
 	public async Task<ShiftDTO> Create(ShiftCreate model, Guid requesterId)
@@ -101,11 +98,8 @@ public class ShiftService
 	private async Task<User> RequireManagerOrAdmin(Guid requesterId)
 	{
 		User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
-		if (requester.Role == UserRole.Employee)
-		{
-			throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
-		}
-
-		return requester;
+		return requester.Role == UserRole.Employee
+			? throw new ForbiddenException("Non hai i permessi per eseguire questa azione")
+			: requester;
 	}
 }

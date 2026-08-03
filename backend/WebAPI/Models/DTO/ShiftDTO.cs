@@ -13,22 +13,18 @@ public class ShiftDTO
 
 	public static ShiftDTO FromShift(Shift shift)
 	{
-		if (shift is null)
-		{
-			return null;
-		}
-
-		return new ShiftDTO
-		{
-			Id = shift.Id,
-			Date = shift.Date,
-			EmployeeId = shift.EmployeeId,
-			StartTime = shift.StartTime,
-			Duration = shift.Duration,
-			CreatedBy = shift.CreatedBy,
-			CreatedAt = shift.CreatedAt,
-			UpdatedAt = shift.UpdatedAt
-		};
-
+		return shift is null
+			? null
+			: new ShiftDTO
+			{
+				Id = shift.Id,
+				Date = shift.Date,
+				EmployeeId = shift.EmployeeId,
+				StartTime = shift.StartTime,
+				Duration = shift.Duration,
+				CreatedBy = shift.CreatedBy,
+				CreatedAt = shift.CreatedAt,
+				UpdatedAt = shift.UpdatedAt
+			};
 	}
 }

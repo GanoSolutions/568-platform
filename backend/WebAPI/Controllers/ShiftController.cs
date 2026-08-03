@@ -30,12 +30,7 @@ public class ShiftController : Controller
 	public async Task<IActionResult> GetById(Guid id)
 	{
 		ShiftDTO dto = await _shiftService.GetById(id);
-		if (dto is null)
-		{
-			return NotFound();
-		}
-
-		return Ok(dto);
+		return dto is null ? NotFound() : Ok(dto);
 	}
 
 	/// <summary>
@@ -67,11 +62,7 @@ public class ShiftController : Controller
 	public async Task<IActionResult> Create([FromBody] ShiftCreate model)
 	{
 		Guid requesterId = GetRequesterId();
-		if (requesterId == Guid.Empty)
-		{
-			return Unauthorized();
-		}
-		return Created(string.Empty, await _shiftService.Create(model, requesterId));
+		return requesterId == Guid.Empty ? Unauthorized() : Created(string.Empty, await _shiftService.Create(model, requesterId));
 	}
 
 	/// <summary>

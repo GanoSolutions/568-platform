@@ -7,15 +7,12 @@ public class ClosedDayDTO
 
 	public static ClosedDayDTO FromClosedDay(ClosedDay cd)
 	{
-		if (cd is null)
-		{
-			return null;
-		}
-
-		return new ClosedDayDTO
-		{
-			Id = cd.Id,
-			Date = cd.Date
-		};
+		return cd is null
+			? null
+			: new ClosedDayDTO
+			{
+				Id = cd.Id,
+				Date = cd.Date
+			};
 	}
 }
