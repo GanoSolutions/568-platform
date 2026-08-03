@@ -66,7 +66,8 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
 		try {
 			const dtos = await swapRequestApi.getForUser();
-			setRequests(dtos.map(fromDTO));
+			const sorted = dtos.map(fromDTO).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+			setRequests(sorted);
 		} catch (loadError) {
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento richieste non riuscito');
 		} finally {

@@ -269,7 +269,7 @@ export default function Requests() {
 					{requests.map((request: SwapRequest) => {
 						const isIncoming = request.targetEmployeeId === user?.id;
 						const isOwn = request.requesterId === user?.id;
-						const canRespond = request.status === 'pending' && (isIncoming || user?.role === 'admin');
+						const canRespond = request.status === 'pending' && (isIncoming || user?.isAdmin === true);
 						const canCancel = request.status === 'pending' && isOwn;
 						const requester = employeesById.get(request.requesterId);
 						const requesterName = requester?.name ?? 'Sconosciuto';
