@@ -274,5 +274,8 @@ dotnet_diagnostic.IDE0058.severity = none
 
 # Test method names follow the MethodUnderTest_Scenario_ExpectedResult convention,
 # which relies on underscores for readability — CA1707 only applies to test code.
+# CA1711 flags xUnit's own "XCollection" naming idiom for collection fixtures
+# ([CollectionDefinition] + ICollectionFixture<T>), which isn't a real ICollection<T>.
 [backend/tests/**/*.cs]
 dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1711.severity = none
