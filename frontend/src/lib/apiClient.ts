@@ -383,10 +383,10 @@ export const SwapRequestStatus = {
 	Cancelled: 3,
 } as const;
 
-/** Mirror of the C# SwapRequestDTO. No nested requester/target employee data — bare ids only. */
+/** Mirror of the C# SwapRequestDTO. Il turno è annidato (niente più N GET /shift lato client); requester/target employee restano bare id. */
 export interface SwapRequestDTO {
 	id: string;
-	shiftId: string;
+	shift: ShiftDTO;
 	requesterId: string;
 	targetEmployeeId: string;
 	status: SwapRequestStatusDTO;

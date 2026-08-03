@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { shiftApi, swapRequestApi, SwapRequestStatus, type SwapRequestDTO, type SwapRequestStatusDTO } from '@/lib/apiClient';
+import { swapRequestApi, SwapRequestStatus, type SwapRequestDTO, type SwapRequestStatusDTO } from '@/lib/apiClient';
 import type { SwapRequest } from '@/types';
 
 interface RequestsContextValue {
@@ -36,38 +36,18 @@ function toFrontendStatus(status: SwapRequestStatusDTO): SwapRequest['status'] {
 	}
 }
 
-/**
- * SwapRequestDTO porta solo lo shiftId, non data/updatedAt del turno: li
- * risolviamo con una getById per ogni turno distinto referenziato dalla lista.
- */
-async function resolveWithShiftInfo(dtos: SwapRequestDTO[]): Promise<SwapRequest[]> {
-	const uniqueShiftIds = [...new Set(dtos.map(dto => dto.shiftId))];
-	const shiftEntries = await Promise.all(
-		uniqueShiftIds.map(async (id): Promise<[string, { date: string; updatedAt: string } | null]> => {
-			try {
-				const shift = await shiftApi.getById(id);
-				return [id, { date: shift.date, updatedAt: shift.updatedAt }];
-			} catch {
-				return [id, null];
-			}
-		}),
-	);
-	const shiftsById = new Map(shiftEntries);
-
-	return dtos.map(dto => {
-		const shift = shiftsById.get(dto.shiftId);
-		return {
-			id: dto.id,
-			shiftId: dto.shiftId,
-			requesterId: dto.requesterId,
-			targetEmployeeId: dto.targetEmployeeId,
-			status: toFrontendStatus(dto.status),
-			createdAt: dto.createdAt,
-			respondedAt: dto.respondedAt,
-			workDate: shift?.date ?? '',
-			shiftUpdatedAt: shift?.updatedAt ?? '',
-		};
-	});
+function fromDTO(dto: SwapRequestDTO): SwapRequest {
+	return {
+		id: dto.id,
+		shiftId: dto.shift.id,
+		requesterId: dto.requesterId,
+		targetEmployeeId: dto.targetEmployeeId,
+		status: toFrontendStatus(dto.status),
+		createdAt: dto.createdAt,
+		respondedAt: dto.respondedAt,
+		workDate: dto.shift.date,
+		shiftUpdatedAt: dto.shift.updatedAt,
+	};
 }
 
 export function RequestsProvider({ children }: { children: ReactNode }) {
@@ -86,7 +66,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
 		try {
 			const dtos = await swapRequestApi.getForUser();
-			setRequests(await resolveWithShiftInfo(dtos));
+			setRequests(dtos.map(fromDTO));
 		} catch (loadError) {
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento richieste non riuscito');
 		} finally {

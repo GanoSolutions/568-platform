@@ -271,12 +271,17 @@ export default function Requests() {
 						const isOwn = request.requesterId === user?.id;
 						const canRespond = request.status === 'pending' && (isIncoming || user?.role === 'admin');
 						const canCancel = request.status === 'pending' && isOwn;
-						const requesterName = employeesById.get(request.requesterId)?.name ?? 'Sconosciuto';
+						const requester = employeesById.get(request.requesterId);
+						const requesterName = requester?.name ?? 'Sconosciuto';
 						const targetName = employeesById.get(request.targetEmployeeId)?.name ?? 'Sconosciuto';
 						const shiftChanged = Boolean(request.shiftUpdatedAt) && new Date(request.shiftUpdatedAt) > new Date(request.createdAt);
 
 						return (
-							<div key={request.id} className="bg-white px-4 py-4 space-y-3">
+							<div
+								key={request.id}
+								className="px-4 py-4 space-y-3"
+								style={{ backgroundColor: requester ? `${requester.color}12` : 'white' }}
+							>
 								<div className="flex items-start justify-between gap-3">
 									<div>
 										<p className="font-semibold text-slate-800">{request.workDate ? formatDate(request.workDate) : '—'}</p>
