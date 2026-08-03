@@ -53,7 +53,7 @@ public class UserService
 
 	public async Task<IEnumerable<UserDTO>> GetAll()
 	{
-		return (await _userFacade.GetAll()).Select(x => UserDTO.FromUser(x));
+		return (await _userFacade.GetAll()).Select(UserDTO.FromUser);
 	}
 
 	public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
