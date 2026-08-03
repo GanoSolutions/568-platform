@@ -134,11 +134,15 @@ export default function Employees() {
 								<p className="text-xs text-slate-500 truncate">{emp.email}</p>
 							</div>
 							{/* Badge invito */}
-						{emp.firstLoginCompleted ? (
-							<span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">
-								Attivo
-							</span>
-						) : emp.invited ? (
+							{emp.disabled ? (
+								<span className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full shrink-0">
+									Disabilitato
+								</span>
+							) : emp.firstLoginCompleted ? (
+								<span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">
+									Attivo
+								</span>
+							) : emp.invited ? (
 								<span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full shrink-0">
 									Invitato
 								</span>
