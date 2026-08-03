@@ -52,7 +52,7 @@ public class JwtServiceTests
 		string email = "admin@five68.com";
 		Tokens tokens = _sut.GenerateTokens(Guid.NewGuid(), email);
 
-		JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
+		JwtSecurityTokenHandler handler = new();
 		JwtSecurityToken jwt = handler.ReadJwtToken(tokens.AccessToken);
 
 		jwt.Claims

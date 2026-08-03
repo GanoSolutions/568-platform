@@ -24,7 +24,7 @@ public class TestUserUtils
 			}
 		});
 
-		PasswordValidatorService validator = new PasswordValidatorService(settings.Value.PasswordRequirements);
+		PasswordValidatorService validator = new(settings.Value.PasswordRequirements);
 		_sut = new UserUtils(settings, validator);
 	}
 
@@ -64,7 +64,7 @@ public class TestUserUtils
 	public void CheckPassword_CorrectPassword_ReturnsTrue()
 	{
 		string password = "ValidP@ss1!";
-		User user = new User
+		User user = new()
 		{
 			Id = Guid.NewGuid(),
 			Email = "test@five68.com",
