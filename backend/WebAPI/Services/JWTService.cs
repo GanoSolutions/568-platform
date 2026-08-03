@@ -64,7 +64,10 @@ public class JwtService
 		}
 	}
 
-	private static string GenerateRefreshToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+	private static string GenerateRefreshToken()
+	{
+		return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+	}
 
 	public ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
 	{
