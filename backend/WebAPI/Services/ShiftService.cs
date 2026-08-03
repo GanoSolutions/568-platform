@@ -10,7 +10,8 @@ namespace Five68.Services
 		private readonly ShiftFacade _shiftFacade;
 		private readonly UserFacade _userFacade;
 		private readonly EmployeeFacade _employeeFacade;
-		private ILogger _logger;
+		private readonly IShiftNotificationService _notificationService;
+		private readonly ILogger _logger;
 
 		public ShiftService(
 			ShiftFacade shiftFacade,
@@ -65,7 +66,9 @@ namespace Five68.Services
 				CreatedBy = requesterId,
 			});
 
+			await _notificationService.NotifyShiftChangedAsync();
 			_logger.LogInformation($"User {requester.Email} created a {created.Duration} hours shift on {created.Date} for employee {created.EmployeeId} starting at {created.StartTime}");
+
 			return ShiftDTO.FromShift(created);
 		}
 
@@ -84,7 +87,9 @@ namespace Five68.Services
 
 			Shift updated = await _shiftFacade.UpdateAsync(shift);
 
+			await _notificationService.NotifyShiftChangedAsync();
 			_logger.LogInformation($"User {requester.Email} updated shift on {updated.Date} to a {updated.Duration} hours shift starting at {updated.StartTime}");
+
 			return ShiftDTO.FromShift(updated);
 		}
 
@@ -95,6 +100,7 @@ namespace Five68.Services
 			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
 			await _shiftFacade.DeleteAsync(shift);
 
+			await _notificationService.NotifyShiftChangedAsync();
 			_logger.LogInformation($"User {requester.Email} deleted shift on {shift.Date} - {shift.StartTime}");
 		}
 

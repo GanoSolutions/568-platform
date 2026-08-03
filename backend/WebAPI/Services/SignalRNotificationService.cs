@@ -1,0 +1,33 @@
+using Five68.Hubs;
+using Five68.Models;
+using Microsoft.AspNetCore.SignalR;
+
+namespace Five68.Services
+{
+	public class SignalRNotificationService : ISwapRequestNotificationService, IShiftNotificationService
+	{
+		private readonly IHubContext<AppHub, IAppRealtimeClient> _hub;
+		private readonly ILogger<SignalRNotificationService> _logger;
+
+		public SignalRNotificationService(
+			IHubContext<AppHub, IAppRealtimeClient> hub,
+			ILogger<SignalRNotificationService> logger
+		)
+		{
+			_hub = hub;
+			_logger = logger;
+		}
+
+		public async Task NotifyShiftChangedAsync()
+		{
+			_logger.LogInformation("Broadcasting ShiftsChanged event");
+			await _hub.Clients.All.ShiftsChanged();
+		}
+
+		public async Task NotifySwapRequestChangedAsync()
+		{
+			_logger.LogInformation("Broadcasting SwapRequest ");
+			await _hub.Clients.All.SwapRequestsChanged();
+		}
+	}
+}
