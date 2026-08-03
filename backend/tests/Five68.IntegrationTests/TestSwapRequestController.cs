@@ -152,7 +152,7 @@ public class TestSwapRequestController
 	[Fact]
 	public async Task Create_UnknownShift_Returns404()
 	{
-		Guid requesterId = _factory.CreateEmployee("sr-create-5-req@five68.com");
+		_factory.CreateEmployee("sr-create-5-req@five68.com");
 		Guid targetId = _factory.CreateEmployee("sr-create-5-tgt@five68.com");
 
 		await _client.AuthorizeAsAsync(_factory, "sr-create-5-req@five68.com");
@@ -170,7 +170,7 @@ public class TestSwapRequestController
 	{
 		Guid managerId = _factory.GetUserId(ManagerEmail);
 		Guid shiftOwnerId = _factory.CreateEmployee("sr-create-6-owner@five68.com");
-		Guid otherEmployeeId = _factory.CreateEmployee("sr-create-6-other@five68.com");
+		_factory.CreateEmployee("sr-create-6-other@five68.com");
 		Guid targetId = _factory.CreateEmployee("sr-create-6-tgt@five68.com");
 		Guid shiftId = _factory.SeedShift(shiftOwnerId, new DateOnly(2031, 7, 6), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
@@ -319,7 +319,7 @@ public class TestSwapRequestController
 		Guid managerId = _factory.GetUserId(ManagerEmail);
 		Guid requesterId = _factory.CreateEmployee("sr-accept-3-req@five68.com");
 		Guid targetId = _factory.CreateEmployee("sr-accept-3-tgt@five68.com");
-		Guid otherId = _factory.CreateEmployee("sr-accept-3-other@five68.com");
+		_factory.CreateEmployee("sr-accept-3-other@five68.com");
 		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 8, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 		Guid requestId = SeedSwapRequest(shiftId, requesterId, targetId);
 
@@ -462,7 +462,7 @@ public class TestSwapRequestController
 		Guid managerId = _factory.GetUserId(ManagerEmail);
 		Guid requesterId = _factory.CreateEmployee("sr-reject-3-req@five68.com");
 		Guid targetId = _factory.CreateEmployee("sr-reject-3-tgt@five68.com");
-		Guid otherId = _factory.CreateEmployee("sr-reject-3-other@five68.com");
+		_factory.CreateEmployee("sr-reject-3-other@five68.com");
 		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 9, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 		Guid requestId = SeedSwapRequest(shiftId, requesterId, targetId);
 

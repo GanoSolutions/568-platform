@@ -39,8 +39,7 @@ public class ShiftService
 	public async Task<ShiftDTO> Create(ShiftCreate model, Guid requesterId)
 	{
 		User requester = await RequireManagerOrAdmin(requesterId);
-
-		Employee employee = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Dipendente non trovato");
+		_ = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Dipendente non trovato");
 		if (await _shiftFacade.IsClosedDayAsync(model.Date))
 		{
 			throw new EntityException("Non è possibile assegnare un dipendente in un giorno di chiusura");
