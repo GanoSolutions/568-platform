@@ -87,7 +87,7 @@ public class TestSwapRequestController
 		response.StatusCode.Should().Be(HttpStatusCode.Created);
 		List<SwapRequestDTO>? created = await response.Content.ReadFromJsonAsync<List<SwapRequestDTO>>(_jsonOptions);
 		created.Should().HaveCount(1);
-		created![0].ShiftId.Should().Be(shiftId);
+		created[0].ShiftId.Should().Be(shiftId);
 		created[0].RequesterId.Should().Be(requesterId);
 		created[0].TargetEmployeeId.Should().Be(targetId);
 		created[0].Status.Should().Be(SwapRequestStatus.Pending);
@@ -113,7 +113,7 @@ public class TestSwapRequestController
 		response.StatusCode.Should().Be(HttpStatusCode.Created);
 		List<SwapRequestDTO>? created = await response.Content.ReadFromJsonAsync<List<SwapRequestDTO>>(_jsonOptions);
 		created.Should().HaveCount(2);
-		created!.Select(x => x.TargetEmployeeId).Should().BeEquivalentTo([targetB, targetC]);
+		created.Select(x => x.TargetEmployeeId).Should().BeEquivalentTo([targetB, targetC]);
 	}
 
 	[Fact]

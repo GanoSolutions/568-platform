@@ -173,7 +173,7 @@ public class TestShiftController
 		List<ShiftDTO>? list = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
 		list.Should().HaveCount(3);
 		list.Should().BeInAscendingOrder(x => x.Date);
-		list!.Select(x => x.EmployeeId).Should().NotContain(empOutside);
+		list.Select(x => x.EmployeeId).Should().NotContain(empOutside);
 	}
 
 	[Fact]
