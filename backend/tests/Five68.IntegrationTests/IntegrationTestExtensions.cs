@@ -23,7 +23,9 @@ public static class IntegrationTestExtensions
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 
 		if (db.Users.Any(u => u.Email == email))
+		{
 			return;
+		}
 
 		db.Users.Add(new User
 		{

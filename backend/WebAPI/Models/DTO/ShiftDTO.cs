@@ -13,7 +13,10 @@ public class ShiftDTO
 
 	public static ShiftDTO FromShift(Shift shift)
 	{
-		if (shift is null) return null;
+		if (shift is null)
+		{
+			return null;
+		}
 
 		return new ShiftDTO
 		{
