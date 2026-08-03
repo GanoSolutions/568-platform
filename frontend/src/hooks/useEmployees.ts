@@ -26,6 +26,7 @@ function mapUserDTOToEmployee(dto: UserDTO): EmployeeDetail {
 		// invito esistente = qualsiasi stato oltre Pending; primo accesso completato = Active o Disabled
 		invited: dto.status !== UserStatus.Pending,
 		firstLoginCompleted: dto.status >= UserStatus.Active,
+		disabled: dto.status === UserStatus.Disabled,
 	};
 }
 
@@ -78,6 +79,7 @@ export function useEmployees() {
 				color,
 				invited: false,
 				firstLoginCompleted: false,
+				disabled: false,
 			};
 			setEmployees(prev => [...prev, newEmp]);
 			return newEmp;
