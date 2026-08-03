@@ -401,6 +401,38 @@ public class TestSwapRequestController
 	}
 
 	[Fact]
+	public async Task Accept_ShiftDateInPast_Returns422AndDoesNotReassignShift()
+	{
+		Guid managerId = factory_.GetUserId(ManagerEmail);
+		Guid requesterId = factory_.CreateEmployee("sr-accept-10-req@five68.com");
+		Guid targetId = factory_.CreateEmployee("sr-accept-10-tgt@five68.com");
+		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2020, 1, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid requestId = SeedSwapRequest(shiftId, requesterId, targetId);
+
+		await client_.AuthorizeAsAsync(factory_, "sr-accept-10-tgt@five68.com");
+		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requestId}/accept", null);
+
+		response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+		GetShiftEmployeeId(shiftId).Should().Be(requesterId);
+		GetSwapRequestStatus(requestId).Should().Be(SwapRequestStatus.Pending);
+	}
+
+	[Fact]
+	public async Task Accept_ShiftDateInPast_ByAdmin_Returns422()
+	{
+		Guid managerId = factory_.GetUserId(ManagerEmail);
+		Guid requesterId = factory_.CreateEmployee("sr-accept-11-req@five68.com");
+		Guid targetId = factory_.CreateEmployee("sr-accept-11-tgt@five68.com");
+		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2020, 1, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid requestId = SeedSwapRequest(shiftId, requesterId, targetId);
+
+		await client_.AuthorizeAsAsync(factory_, AdminEmail);
+		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requestId}/accept", null);
+
+		response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+	}
+
+	[Fact]
 	public async Task Accept_TargetBecameBusyInTheMeantime_Returns422AndDoesNotReassignShift()
 	{
 		Guid managerId = factory_.GetUserId(ManagerEmail);
@@ -491,6 +523,22 @@ public class TestSwapRequestController
 	}
 
 	[Fact]
+	public async Task Reject_ShiftDateInPast_Returns422()
+	{
+		Guid managerId = factory_.GetUserId(ManagerEmail);
+		Guid requesterId = factory_.CreateEmployee("sr-reject-7-req@five68.com");
+		Guid targetId = factory_.CreateEmployee("sr-reject-7-tgt@five68.com");
+		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2020, 1, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid requestId = SeedSwapRequest(shiftId, requesterId, targetId);
+
+		await client_.AuthorizeAsAsync(factory_, "sr-reject-7-tgt@five68.com");
+		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requestId}/reject", null);
+
+		response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+		GetSwapRequestStatus(requestId).Should().Be(SwapRequestStatus.Pending);
+	}
+
+	[Fact]
 	public async Task Reject_AlreadyHandled_Returns422()
 	{
 		Guid managerId = factory_.GetUserId(ManagerEmail);
@@ -517,6 +565,22 @@ public class TestSwapRequestController
 		Guid requestId = SeedSwapRequest(shiftId, requesterId, targetId);
 
 		await client_.AuthorizeAsAsync(factory_, "sr-cancel-1-req@five68.com");
+		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requestId}/cancel", null);
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		GetSwapRequestStatus(requestId).Should().Be(SwapRequestStatus.Cancelled);
+	}
+
+	[Fact]
+	public async Task Cancel_ShiftDateInPast_Returns200()
+	{
+		Guid managerId = factory_.GetUserId(ManagerEmail);
+		Guid requesterId = factory_.CreateEmployee("sr-cancel-7-req@five68.com");
+		Guid targetId = factory_.CreateEmployee("sr-cancel-7-tgt@five68.com");
+		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2020, 1, 4), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid requestId = SeedSwapRequest(shiftId, requesterId, targetId);
+
+		await client_.AuthorizeAsAsync(factory_, "sr-cancel-7-req@five68.com");
 		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requestId}/cancel", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
