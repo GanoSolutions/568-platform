@@ -1,12 +1,11 @@
 using Five68.Models;
 
-namespace Five68.Services
+namespace Five68.Services;
+
+public interface INotificationService
 {
-	public interface INotificationService
-	{
-		Task SendInviteAsync(string toEmail, string inviteLink);
-		Task NotifySwapRequestCreatedAsync(SwapRequest request);
-		Task NotifySwapRequestRespondedAsync(SwapRequest request);
-		Task NotifySwapRequestCancelledAsync(SwapRequest request);
-	}
+	Task SendInviteAsync(string toEmail, string inviteLink);
+	Task NotifySwapRequestCreatedAsync(SwapRequest request);
+	Task NotifySwapRequestRespondedAsync(SwapRequest request);
+	Task NotifySwapRequestCancelledAsync(SwapRequest request);
 }

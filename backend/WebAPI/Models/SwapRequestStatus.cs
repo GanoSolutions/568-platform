@@ -1,10 +1,9 @@
-namespace Five68.Models
+namespace Five68.Models;
+
+public enum SwapRequestStatus
 {
-	public enum SwapRequestStatus
-	{
-		Pending,
-		Accepted,
-		Rejected,
-		Cancelled
-	}
+	Pending,
+	Accepted,
+	Rejected,
+	Cancelled
 }

@@ -1,8 +1,7 @@
-namespace Five68.Models.Authentication
+namespace Five68.Models.Authentication;
+
+public class ChangePassword
 {
-	public class ChangePassword
-	{
-		public required string CurrentPassword { get; set; }
-		public required string NewPassword { get; set; }
-	}
+	public required string CurrentPassword { get; set; }
+	public required string NewPassword { get; set; }
 }

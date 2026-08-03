@@ -7,6 +7,7 @@
 		<GenerateDocumentationFile>True</GenerateDocumentationFile>
 		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 		<CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
+		<RootNamespace>Five68</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

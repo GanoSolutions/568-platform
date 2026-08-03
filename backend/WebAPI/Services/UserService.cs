@@ -5,154 +5,153 @@ using Five68.Models.Authentication;
 using Five68.Models.DTO;
 using Five68.Utils;
 
-namespace Five68.Services
+namespace Five68.Services;
+
+public class UserService
 {
-	public class UserService
+	private readonly UserFacade userFacade_;
+	private readonly EmployeeFacade employeeFacade_;
+	private readonly UserUtils userUtils_;
+	private readonly INotificationService _notificationService;
+	private ILogger logger_;
+
+	public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, INotificationService notificationService, ILogger<UserService> logger)
 	{
-		private readonly UserFacade userFacade_;
-		private readonly EmployeeFacade employeeFacade_;
-		private readonly UserUtils userUtils_;
-		private readonly INotificationService _notificationService;
-		private ILogger logger_;
+		userFacade_ = userFacade;
+		employeeFacade_ = employeeFacade;
+		userUtils_ = userUtils;
+		_notificationService = notificationService;
+		logger_ = logger;
+	}
 
-		public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, INotificationService notificationService, ILogger<UserService> logger)
+	public async Task<UserDTO> GetUserDTO(Guid id)
+	{
+		return UserDTO.FromUser(await userFacade_.FindByIdAsync(id));
+	}
+
+	public async Task<User> Get(Guid id)
+	{
+		return await userFacade_.FindByIdAsync(id);
+	}
+
+	public async Task<(bool success, User? user)> TryGetUserAndCheckPasswordAsync(UserLogin loginCredentials)
+	{
+		User? user = await userFacade_.FindByEmailAsync(loginCredentials.Email);
+
+		if (user is null)
 		{
-			userFacade_ = userFacade;
-			employeeFacade_ = employeeFacade;
-			userUtils_ = userUtils;
-			_notificationService = notificationService;
-			logger_ = logger;
+			return (false, null);
 		}
 
-		public async Task<UserDTO> GetUserDTO(Guid id)
+		if (!userUtils_.CheckPassword(user, loginCredentials.Password))
 		{
-			return UserDTO.FromUser(await userFacade_.FindByIdAsync(id));
+			return (false, null);
 		}
 
-		public async Task<User> Get(Guid id)
+		return (true, user);
+	}
+
+	public async Task<IEnumerable<UserDTO>> GetAll()
+	{
+		return (await userFacade_.GetAll()).Select(x => UserDTO.FromUser(x));
+	}
+
+	public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
+	{
+		User requester = await userFacade_.FindByIdAsync(requesterId);
+		if (requester is null)
 		{
-			return await userFacade_.FindByIdAsync(id);
+			throw new UnauthorizedException();
+		}
+		if (requester.Role >= UserRole.Employee)
+		{
+			throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
 		}
 
-		public async Task<(bool success, User? user)> TryGetUserAndCheckPasswordAsync(UserLogin loginCredentials)
+		User user = await userFacade_.FindByIdAsync(userId);
+		if (user is null)
+			throw new NotFoundException("Utente non trovato");
+
+		string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+		user.Status = UserStatus.Pending;
+		user.InviteToken = token;
+		user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
+
+		await userFacade_.UpdateAsync(user);
+		await _notificationService.SendInviteAsync(user.Email, token);
+		logger_.LogInformation($"User {requester.Email} invited {user.Email} to change password");
+		return token;
+	}
+
+	public async Task AcceptInvite(InviteAccept model)
+	{
+		User user = await userFacade_.FindByInviteTokenAsync(model.Token);
+		if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
+			throw new UnauthorizedException("Token di invito non valido o scaduto");
+
+		await employeeFacade_.CreateAsync(new Employee
 		{
-			User? user = await userFacade_.FindByEmailAsync(loginCredentials.Email);
+			UserId = user.Id,
+			Name = model.Name,
+			Surname = model.Surname,
+			FiscalCode = model.FiscalCode,
+			Phone = model.Phone,
+		});
 
-			if (user is null)
-			{
-				return (false, null);
-			}
+		user.PasswordHash = userUtils_.HashAndCheckPassword(model.Password);
+		user.Status = UserStatus.Active;
+		user.InviteToken = null;
+		user.InviteTokenExpiry = null;
+		logger_.LogInformation($"User {user.Email} accepted invite");
 
-			if (!userUtils_.CheckPassword(user, loginCredentials.Password))
-			{
-				return (false, null);
-			}
+		await userFacade_.UpdateAsync(user);
+	}
 
-			return (true, user);
+	public async Task CreateUser(UserRegister model, Guid userId)
+	{
+		User requester = await userFacade_.FindByIdAsync(userId);
+		if (requester is null)
+		{
+			throw new UnauthorizedException();
+		}
+		logger_.LogInformation($"User {requester.Email} requested signup of user {model.Email}");
+
+		if (model.Role <= requester.Role)
+		{
+			throw new ForbiddenException("Non puoi creare un utente con un ruolo uguale o superiore al tuo");
 		}
 
-		public async Task<IEnumerable<UserDTO>> GetAll()
+		User existing = await userFacade_.FindByEmailAsync(model.Email);
+		if (existing is not null)
 		{
-			return (await userFacade_.GetAll()).Select(x => UserDTO.FromUser(x));
+			throw new EntityException("Email già in uso");
 		}
 
-		public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
+		await userFacade_.CreateAsync(new User
 		{
-			User requester = await userFacade_.FindByIdAsync(requesterId);
-			if (requester is null)
-			{
-				throw new UnauthorizedException();
-			}
-			if (requester.Role >= UserRole.Employee)
-			{
-				throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
-			}
+			Id = Guid.NewGuid(),
+			Email = model.Email,
+			PasswordHash = userUtils_.HashAndCheckPassword(model.Password),
+			Role = model.Role,
+			Status = UserStatus.Disabled,
+		});
+	}
 
-			User user = await userFacade_.FindByIdAsync(userId);
-			if (user is null)
-				throw new NotFoundException("Utente non trovato");
-
-			string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-
-			user.Status = UserStatus.Pending;
-			user.InviteToken = token;
-			user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
-
-			await userFacade_.UpdateAsync(user);
-			await _notificationService.SendInviteAsync(user.Email, token);
-			logger_.LogInformation($"User {requester.Email} invited {user.Email} to change password");
-			return token;
+	public async Task ChangePassword(Guid userId, ChangePassword model)
+	{
+		User user = await userFacade_.FindByIdAsync(userId);
+		if (user is null)
+		{
+			throw new UnauthorizedException();
 		}
 
-		public async Task AcceptInvite(InviteAccept model)
+		if (!userUtils_.CheckPassword(user, model.CurrentPassword))
 		{
-			User user = await userFacade_.FindByInviteTokenAsync(model.Token);
-			if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
-				throw new UnauthorizedException("Token di invito non valido o scaduto");
-
-			await employeeFacade_.CreateAsync(new Employee
-			{
-				UserId = user.Id,
-				Name = model.Name,
-				Surname = model.Surname,
-				FiscalCode = model.FiscalCode,
-				Phone = model.Phone,
-			});
-
-			user.PasswordHash = userUtils_.HashAndCheckPassword(model.Password);
-			user.Status = UserStatus.Active;
-			user.InviteToken = null;
-			user.InviteTokenExpiry = null;
-			logger_.LogInformation($"User {user.Email} accepted invite");
-
-			await userFacade_.UpdateAsync(user);
+			throw new EntityException("La password attuale non è corretta");
 		}
 
-		public async Task CreateUser(UserRegister model, Guid userId)
-		{
-			User requester = await userFacade_.FindByIdAsync(userId);
-			if (requester is null)
-			{
-				throw new UnauthorizedException();
-			}
-			logger_.LogInformation($"User {requester.Email} requested signup of user {model.Email}");
-
-			if (model.Role <= requester.Role)
-			{
-				throw new ForbiddenException("Non puoi creare un utente con un ruolo uguale o superiore al tuo");
-			}
-
-			User existing = await userFacade_.FindByEmailAsync(model.Email);
-			if (existing is not null)
-			{
-				throw new EntityException("Email già in uso");
-			}
-
-			await userFacade_.CreateAsync(new User
-			{
-				Id = Guid.NewGuid(),
-				Email = model.Email,
-				PasswordHash = userUtils_.HashAndCheckPassword(model.Password),
-				Role = model.Role,
-				Status = UserStatus.Disabled,
-			});
-		}
-
-		public async Task ChangePassword(Guid userId, ChangePassword model)
-		{
-			User user = await userFacade_.FindByIdAsync(userId);
-			if (user is null)
-			{
-				throw new UnauthorizedException();
-			}
-
-			if (!userUtils_.CheckPassword(user, model.CurrentPassword))
-			{
-				throw new EntityException("La password attuale non è corretta");
-			}
-
-			user.PasswordHash = userUtils_.HashAndCheckPassword(model.NewPassword);
-			await userFacade_.UpdateAsync(user);
-		}
+		user.PasswordHash = userUtils_.HashAndCheckPassword(model.NewPassword);
+		await userFacade_.UpdateAsync(user);
 	}
 }
