@@ -13,7 +13,7 @@ namespace Five68.UnitTests;
 
 public class JwtServiceTests
 {
-	private readonly JwtService sut_;
+	private readonly JwtService _sut;
 
 	// Costanti condivise tra generazione e verifica
 	private const string Secret = "super-secret-key-at-least-32-bytes!!";
@@ -34,13 +34,13 @@ public class JwtServiceTests
 		});
 
 		ILogger<JwtService> logger = Substitute.For<ILogger<JwtService>>();
-		sut_ = new JwtService(settings, logger);
+		_sut = new JwtService(settings, logger);
 	}
 
 	[Fact]
 	public void GenerateTokens_ValidInput_ReturnsBothTokens()
 	{
-		Tokens tokens = sut_.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
+		Tokens tokens = _sut.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
 
 		tokens.AccessToken.Should().NotBeNullOrEmpty();
 		tokens.RefreshToken.Should().NotBeNullOrEmpty();
@@ -50,7 +50,7 @@ public class JwtServiceTests
 	public void GenerateTokens_AccessToken_ContainsCorrectEmailClaim()
 	{
 		string email = "admin@five68.com";
-		Tokens tokens = sut_.GenerateTokens(Guid.NewGuid(), email);
+		Tokens tokens = _sut.GenerateTokens(Guid.NewGuid(), email);
 
 		JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
 		JwtSecurityToken jwt = handler.ReadJwtToken(tokens.AccessToken);
@@ -63,7 +63,7 @@ public class JwtServiceTests
 	[Fact]
 	public void GenerateTokens_AccessToken_IsValidSignature()
 	{
-		Tokens tokens = sut_.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
+		Tokens tokens = _sut.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
 
 		JwtSecurityTokenHandler handler = new();
 		TokenValidationParameters validationParams = new()
@@ -87,8 +87,8 @@ public class JwtServiceTests
 	public void GenerateTokens_TwoCallsSameUser_ReturnDifferentRefreshTokens()
 	{
 		Guid id = Guid.NewGuid();
-		Tokens t1 = sut_.GenerateTokens(id, "admin@five68.com");
-		Tokens t2 = sut_.GenerateTokens(id, "admin@five68.com");
+		Tokens t1 = _sut.GenerateTokens(id, "admin@five68.com");
+		Tokens t2 = _sut.GenerateTokens(id, "admin@five68.com");
 
 		t1.RefreshToken.Should().NotBe(t2.RefreshToken);
 	}

@@ -11,15 +11,15 @@ namespace Five68.Services;
 
 public class JwtService
 {
-	private readonly JWTSettings jwtSettings_;
-	private readonly ILogger logger_;
+	private readonly JWTSettings _jwtSettings;
+	private readonly ILogger _logger;
 
 	public JwtService(IOptions<AppSettings> appsettings, ILogger<JwtService> logger)
 	{
-		jwtSettings_ = appsettings.Value.JWTSettings;
-		logger_ = logger;
+		_jwtSettings = appsettings.Value.JWTSettings;
+		_logger = logger;
 
-		if (Encoding.UTF8.GetBytes(jwtSettings_.Secret).Length < 32)
+		if (Encoding.UTF8.GetBytes(_jwtSettings.Secret).Length < 32)
 		{
 			throw new InvalidOperationException("JWT secret must be at least 32 bytes");
 		}
@@ -40,14 +40,14 @@ public class JwtService
 	{
 		try
 		{
-			byte[] tokenKey = Encoding.UTF8.GetBytes(jwtSettings_.Secret);
+			byte[] tokenKey = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
 			JwtSecurityTokenHandler tokenHandler = new();
 			SecurityTokenDescriptor tokenDescriptor = new()
 			{
 				Subject = identity,
-				Expires = DateTime.UtcNow.AddMinutes(jwtSettings_.ExpiryMinutes),
-				Issuer = jwtSettings_.ValidIssuer,
-				Audience = jwtSettings_.ValidAudience,
+				Expires = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpiryMinutes),
+				Issuer = _jwtSettings.ValidIssuer,
+				Audience = _jwtSettings.ValidAudience,
 				SigningCredentials = new SigningCredentials(
 					new SymmetricSecurityKey(tokenKey),
 					SecurityAlgorithms.HmacSha256Signature)
@@ -59,7 +59,7 @@ public class JwtService
 		}
 		catch (Exception e)
 		{
-			logger_.LogCritical(e, "Unable to generate a JWT Token");
+			_logger.LogCritical(e, "Unable to generate a JWT Token");
 			throw;
 		}
 	}
@@ -68,7 +68,7 @@ public class JwtService
 
 	public ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
 	{
-		byte[] key = Encoding.UTF8.GetBytes(jwtSettings_.Secret);
+		byte[] key = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
 
 		TokenValidationParameters tokenValidationParameters = new()
 		{
@@ -91,12 +91,12 @@ public class JwtService
 		}
 		catch (SecurityTokenException ex)
 		{
-			logger_.LogWarning(ex, "");
+			_logger.LogWarning(ex, "");
 			throw new UnauthorizedException("Token non valido");
 		}
 		catch (SecurityTokenArgumentException ex)
 		{
-			logger_.LogWarning(ex, "");
+			_logger.LogWarning(ex, "");
 			throw new UnauthorizedException("Token non valido");
 		}
 	}

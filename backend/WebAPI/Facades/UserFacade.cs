@@ -5,54 +5,54 @@ namespace Five68.Facades;
 
 public class UserFacade
 {
-	private readonly Five68DbContext context_;
+	private readonly Five68DbContext _context;
 
 	public UserFacade(Five68DbContext context)
 	{
-		context_ = context;
+		_context = context;
 	}
 
 	internal async Task CreateAsync(User user)
 	{
-		await context_.Users.AddAsync(user);
-		await context_.SaveChangesAsync();
+		await _context.Users.AddAsync(user);
+		await _context.SaveChangesAsync();
 	}
 
 	internal async Task UpdateAsync(User user)
 	{
 		user.UpdatedAt = DateTime.UtcNow;
 
-		context_.Users.Update(user);
-		await context_.SaveChangesAsync();
+		_context.Users.Update(user);
+		await _context.SaveChangesAsync();
 	}
 
 	internal async Task<User> FindByEmailAsync(string email)
 	{
-		return await context_.Users.FirstOrDefaultAsync(x => x.Email == email);
+		return await _context.Users.FirstOrDefaultAsync(x => x.Email == email);
 	}
 
 	internal async Task<User> FindByIdAsync(Guid id)
 	{
-		return await context_.Users
+		return await _context.Users
 			.Include(x => x.Employee)
 			.FirstOrDefaultAsync(x => x.Id == id);
 	}
 
 	internal async Task<IEnumerable<User>> GetAll()
 	{
-		return await context_.Users
+		return await _context.Users
 			.Include(x => x.Employee)
 			.ToListAsync();
 	}
 
 	internal async Task<User> FindByInviteTokenAsync(string token)
 	{
-		return await context_.Users.FirstOrDefaultAsync(x => x.InviteToken == token);
+		return await _context.Users.FirstOrDefaultAsync(x => x.InviteToken == token);
 	}
 
 	internal async Task<int> GetUserNumber()
 	{
-		return await context_.Users.CountAsync();
+		return await _context.Users.CountAsync();
 	}
 
 }

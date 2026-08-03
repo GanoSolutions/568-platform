@@ -13,13 +13,10 @@ namespace Five68.Controllers;
 [Authorize]
 public class UserController : Controller
 {
-	private readonly UserService userService_;
-	private readonly ILogger logger_;
-
-	public UserController(UserService userService, ILogger<UserController> logger = null)
+	private readonly UserService _userService;
+	public UserController(UserService userService)
 	{
-		userService_ = userService;
-		logger_ = logger;
+		_userService = userService;
 	}
 
 	/// <summary>
@@ -33,14 +30,9 @@ public class UserController : Controller
 	public async Task<IActionResult> GetUserById(Guid id)
 	{
 
-		UserDTO user = await userService_.GetUserDTO(id);
+		UserDTO user = await _userService.GetUserDTO(id);
 
-		if (user is null)
-		{
-			return NotFound();
-		}
-
-		return Ok(user);
+		return user is null ? NotFound() : Ok(user);
 	}
 
 	/// <summary>
@@ -51,7 +43,7 @@ public class UserController : Controller
 	[HttpGet("")]
 	public async Task<IActionResult> GetUsers()
 	{
-		IEnumerable<UserDTO> users = await userService_.GetAll();
+		IEnumerable<UserDTO> users = await _userService.GetAll();
 		return Ok(users);
 	}
 
@@ -73,7 +65,7 @@ public class UserController : Controller
 		{
 			return Unauthorized();
 		}
-		await userService_.CreateUser(model, id);
+		await _userService.CreateUser(model, id);
 		return Created();
 	}
 
@@ -95,7 +87,7 @@ public class UserController : Controller
 			return Unauthorized();
 		}
 
-		string token = await userService_.GenerateInvite(id, reqGuid);
+		string token = await _userService.GenerateInvite(id, reqGuid);
 		return Ok(new { inviteToken = token });
 	}
 
@@ -110,7 +102,7 @@ public class UserController : Controller
 	[HttpPost("invite/accept")]
 	public async Task<IActionResult> AcceptInvite([FromBody] InviteAccept model)
 	{
-		await userService_.AcceptInvite(model);
+		await _userService.AcceptInvite(model);
 		return Ok();
 	}
 
@@ -128,8 +120,11 @@ public class UserController : Controller
 	{
 		string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		if (!Guid.TryParse(requesterId, out Guid id))
+		{
 			return Unauthorized();
-		await userService_.ChangePassword(id, model);
+		}
+
+		await _userService.ChangePassword(id, model);
 		return NoContent();
 	}
 }

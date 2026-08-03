@@ -9,41 +9,41 @@ namespace Five68.Services;
 
 public class UserService
 {
-	private readonly UserFacade userFacade_;
-	private readonly EmployeeFacade employeeFacade_;
-	private readonly UserUtils userUtils_;
+	private readonly UserFacade _userFacade;
+	private readonly EmployeeFacade _employeeFacade;
+	private readonly UserUtils _userUtils;
 	private readonly INotificationService _notificationService;
-	private ILogger logger_;
+	private ILogger _logger;
 
 	public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, INotificationService notificationService, ILogger<UserService> logger)
 	{
-		userFacade_ = userFacade;
-		employeeFacade_ = employeeFacade;
-		userUtils_ = userUtils;
+		_userFacade = userFacade;
+		_employeeFacade = employeeFacade;
+		_userUtils = userUtils;
 		_notificationService = notificationService;
-		logger_ = logger;
+		_logger = logger;
 	}
 
 	public async Task<UserDTO> GetUserDTO(Guid id)
 	{
-		return UserDTO.FromUser(await userFacade_.FindByIdAsync(id));
+		return UserDTO.FromUser(await _userFacade.FindByIdAsync(id));
 	}
 
 	public async Task<User> Get(Guid id)
 	{
-		return await userFacade_.FindByIdAsync(id);
+		return await _userFacade.FindByIdAsync(id);
 	}
 
 	public async Task<(bool success, User? user)> TryGetUserAndCheckPasswordAsync(UserLogin loginCredentials)
 	{
-		User? user = await userFacade_.FindByEmailAsync(loginCredentials.Email);
+		User? user = await _userFacade.FindByEmailAsync(loginCredentials.Email);
 
 		if (user is null)
 		{
 			return (false, null);
 		}
 
-		if (!userUtils_.CheckPassword(user, loginCredentials.Password))
+		if (!_userUtils.CheckPassword(user, loginCredentials.Password))
 		{
 			return (false, null);
 		}
@@ -53,44 +53,40 @@ public class UserService
 
 	public async Task<IEnumerable<UserDTO>> GetAll()
 	{
-		return (await userFacade_.GetAll()).Select(x => UserDTO.FromUser(x));
+		return (await _userFacade.GetAll()).Select(x => UserDTO.FromUser(x));
 	}
 
 	public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
 	{
-		User requester = await userFacade_.FindByIdAsync(requesterId);
-		if (requester is null)
-		{
-			throw new UnauthorizedException();
-		}
+		User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
+
 		if (requester.Role >= UserRole.Employee)
 		{
 			throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
 		}
 
-		User user = await userFacade_.FindByIdAsync(userId);
-		if (user is null)
-			throw new NotFoundException("Utente non trovato");
-
+		User user = await _userFacade.FindByIdAsync(userId) ?? throw new NotFoundException("Utente non trovato");
 		string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
 		user.Status = UserStatus.Pending;
 		user.InviteToken = token;
 		user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
 
-		await userFacade_.UpdateAsync(user);
+		await _userFacade.UpdateAsync(user);
 		await _notificationService.SendInviteAsync(user.Email, token);
-		logger_.LogInformation($"User {requester.Email} invited {user.Email} to change password");
+		_logger.LogInformation($"User {requester.Email} invited {user.Email} to change password");
 		return token;
 	}
 
 	public async Task AcceptInvite(InviteAccept model)
 	{
-		User user = await userFacade_.FindByInviteTokenAsync(model.Token);
+		User user = await _userFacade.FindByInviteTokenAsync(model.Token);
 		if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
+		{
 			throw new UnauthorizedException("Token di invito non valido o scaduto");
+		}
 
-		await employeeFacade_.CreateAsync(new Employee
+		await _employeeFacade.CreateAsync(new Employee
 		{
 			UserId = user.Id,
 			Name = model.Name,
@@ -99,59 +95,53 @@ public class UserService
 			Phone = model.Phone,
 		});
 
-		user.PasswordHash = userUtils_.HashAndCheckPassword(model.Password);
+		user.PasswordHash = _userUtils.HashAndCheckPassword(model.Password);
 		user.Status = UserStatus.Active;
 		user.InviteToken = null;
 		user.InviteTokenExpiry = null;
-		logger_.LogInformation($"User {user.Email} accepted invite");
+		_logger.LogInformation($"User {user.Email} accepted invite");
 
-		await userFacade_.UpdateAsync(user);
+		await _userFacade.UpdateAsync(user);
 	}
 
 	public async Task CreateUser(UserRegister model, Guid userId)
 	{
-		User requester = await userFacade_.FindByIdAsync(userId);
-		if (requester is null)
-		{
-			throw new UnauthorizedException();
-		}
-		logger_.LogInformation($"User {requester.Email} requested signup of user {model.Email}");
+		User requester = await _userFacade.FindByIdAsync(userId) ?? throw new UnauthorizedException();
+		_logger.LogInformation($"User {requester.Email} requested signup of user {model.Email}");
 
 		if (model.Role <= requester.Role)
 		{
 			throw new ForbiddenException("Non puoi creare un utente con un ruolo uguale o superiore al tuo");
 		}
 
-		User existing = await userFacade_.FindByEmailAsync(model.Email);
+		User existing = await _userFacade.FindByEmailAsync(model.Email);
 		if (existing is not null)
 		{
 			throw new EntityException("Email già in uso");
 		}
 
-		await userFacade_.CreateAsync(new User
+		await _userFacade.CreateAsync(new User
 		{
 			Id = Guid.NewGuid(),
 			Email = model.Email,
-			PasswordHash = userUtils_.HashAndCheckPassword(model.Password),
+			PasswordHash = _userUtils.HashAndCheckPassword(model.Password),
 			Role = model.Role,
 			Status = UserStatus.Disabled,
 		});
+		_logger.LogInformation($"User {model.Email} created by {requester.Email}");
 	}
 
 	public async Task ChangePassword(Guid userId, ChangePassword model)
 	{
-		User user = await userFacade_.FindByIdAsync(userId);
-		if (user is null)
-		{
-			throw new UnauthorizedException();
-		}
+		User user = await _userFacade.FindByIdAsync(userId) ?? throw new UnauthorizedException();
 
-		if (!userUtils_.CheckPassword(user, model.CurrentPassword))
+		if (!_userUtils.CheckPassword(user, model.CurrentPassword))
 		{
 			throw new EntityException("La password attuale non è corretta");
 		}
 
-		user.PasswordHash = userUtils_.HashAndCheckPassword(model.NewPassword);
-		await userFacade_.UpdateAsync(user);
+		user.PasswordHash = _userUtils.HashAndCheckPassword(model.NewPassword);
+		await _userFacade.UpdateAsync(user);
+		_logger.LogInformation($"User {user.Email} changed their password");
 	}
 }

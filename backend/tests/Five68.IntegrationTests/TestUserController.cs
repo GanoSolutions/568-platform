@@ -13,8 +13,8 @@ namespace Five68.IntegrationTests;
 [Collection("Integration")]
 public class TestUserController
 {
-	private readonly HttpClient client_;
-	private readonly Five68WebAppFactory factory_;
+	private readonly HttpClient _client;
+	private readonly Five68WebAppFactory _factory;
 
 	private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -25,8 +25,8 @@ public class TestUserController
 
 	public TestUserController(Five68WebAppFactory factory)
 	{
-		factory_ = factory;
-		client_ = factory.CreateClient();
+		_factory = factory;
+		_client = factory.CreateClient();
 		SeedUser(AdminEmail, Password, UserRole.Admin);
 		SeedUser(ManagerEmail, Password, UserRole.Manager);
 		SeedUser(EmployeeEmail, Password, UserRole.Employee);
@@ -34,11 +34,13 @@ public class TestUserController
 
 	private void SeedUser(string email, string password, UserRole role)
 	{
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 
 		if (db.Users.Any(u => u.Email == email))
+		{
 			return;
+		}
 
 		db.Users.Add(new User
 		{
@@ -57,7 +59,7 @@ public class TestUserController
 	public async Task GetUsers_Authenticated_Returns200WithList()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.GetAsync("/user");
+		HttpResponseMessage response = await _client.GetAsync("/user");
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		List<UserDTO>? users = await response.Content.ReadFromJsonAsync<List<UserDTO>>();
@@ -67,8 +69,8 @@ public class TestUserController
 	[Fact]
 	public async Task GetUsers_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
-		HttpResponseMessage response = await client_.GetAsync("/user");
+		_client.DefaultRequestHeaders.Authorization = null;
+		HttpResponseMessage response = await _client.GetAsync("/user");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -81,7 +83,7 @@ public class TestUserController
 		await AuthorizeAsAsync(AdminEmail);
 		Guid id = GetUserId(AdminEmail);
 
-		HttpResponseMessage response = await client_.GetAsync($"/user/{id}");
+		HttpResponseMessage response = await _client.GetAsync($"/user/{id}");
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		UserDTO? user = await response.Content.ReadFromJsonAsync<UserDTO>();
@@ -92,7 +94,7 @@ public class TestUserController
 	public async Task GetUserById_UnknownId_Returns404()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.GetAsync($"/user/{Guid.NewGuid()}");
+		HttpResponseMessage response = await _client.GetAsync($"/user/{Guid.NewGuid()}");
 
 		response.StatusCode.Should().Be(HttpStatusCode.NotFound);
 	}
@@ -100,8 +102,8 @@ public class TestUserController
 	[Fact]
 	public async Task GetUserById_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
-		HttpResponseMessage response = await client_.GetAsync($"/user/{Guid.NewGuid()}");
+		_client.DefaultRequestHeaders.Authorization = null;
+		HttpResponseMessage response = await _client.GetAsync($"/user/{Guid.NewGuid()}");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -112,7 +114,7 @@ public class TestUserController
 	public async Task Signup_AdminCreatesManager_Returns201()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = "new.manager@five68.com",
 			Password = Password,
@@ -126,7 +128,7 @@ public class TestUserController
 	public async Task Signup_AdminCreatesEmployee_Returns201()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = "new.employee@five68.com",
 			Password = Password,
@@ -140,7 +142,7 @@ public class TestUserController
 	public async Task Signup_ManagerCreatesEmployee_Returns201()
 	{
 		await AuthorizeAsAsync(ManagerEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = "another.employee@five68.com",
 			Password = Password,
@@ -154,7 +156,7 @@ public class TestUserController
 	public async Task Signup_AdminCreatesAdmin_Returns403()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = "another.admin@five68.com",
 			Password = Password,
@@ -168,7 +170,7 @@ public class TestUserController
 	public async Task Signup_ManagerCreatesManager_Returns403()
 	{
 		await AuthorizeAsAsync(ManagerEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = "another.manager2@five68.com",
 			Password = Password,
@@ -182,7 +184,7 @@ public class TestUserController
 	public async Task Signup_EmployeeCreatesEmployee_Returns403()
 	{
 		await AuthorizeAsAsync(EmployeeEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = "yet.another@five68.com",
 			Password = Password,
@@ -196,7 +198,7 @@ public class TestUserController
 	public async Task Signup_DuplicateEmail_Returns422()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = EmployeeEmail,
 			Password = Password,
@@ -209,8 +211,8 @@ public class TestUserController
 	[Fact]
 	public async Task Signup_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		_client.DefaultRequestHeaders.Authorization = null;
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = "noauth@five68.com",
 			Password = Password,
@@ -224,7 +226,7 @@ public class TestUserController
 	public async Task Signup_MissingEmail_Returns400()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new
 		{
 			Password = Password,
 			Role = UserRole.Employee,
@@ -237,7 +239,7 @@ public class TestUserController
 	public async Task Signup_MissingPassword_Returns400()
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new
 		{
 			Email = "nopassword@five68.com",
 			Role = UserRole.Employee,
@@ -254,7 +256,7 @@ public class TestUserController
 		await AuthorizeAsAsync(AdminEmail);
 		Guid id = GetUserId(EmployeeEmail);
 
-		HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
+		HttpResponseMessage response = await _client.PostAsync($"/user/{id}/invite", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		Dictionary<string, string>? body = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
@@ -267,9 +269,9 @@ public class TestUserController
 		await AuthorizeAsAsync(AdminEmail);
 		Guid id = GetUserId(EmployeeEmail);
 
-		await client_.PostAsync($"/user/{id}/invite", null);
+		await _client.PostAsync($"/user/{id}/invite", null);
 
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		db.Users.First(u => u.Id == id).Status.Should().Be(UserStatus.Pending);
 	}
@@ -280,7 +282,7 @@ public class TestUserController
 		await AuthorizeAsAsync(EmployeeEmail);
 		Guid id = GetUserId(AdminEmail);
 
-		HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
+		HttpResponseMessage response = await _client.PostAsync($"/user/{id}/invite", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 	}
@@ -290,7 +292,7 @@ public class TestUserController
 	{
 		await AuthorizeAsAsync(AdminEmail);
 
-		HttpResponseMessage response = await client_.PostAsync($"/user/{Guid.NewGuid()}/invite", null);
+		HttpResponseMessage response = await _client.PostAsync($"/user/{Guid.NewGuid()}/invite", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.NotFound);
 	}
@@ -298,10 +300,10 @@ public class TestUserController
 	[Fact]
 	public async Task Invite_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
+		_client.DefaultRequestHeaders.Authorization = null;
 		Guid id = GetUserId(EmployeeEmail);
 
-		HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
+		HttpResponseMessage response = await _client.PostAsync($"/user/{id}/invite", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -313,7 +315,7 @@ public class TestUserController
 	{
 		(_, string token) = await CreateInvitedUserAsync("accept-returns200@five68.com");
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/invite/accept", new InviteAccept
 		{
 			Token = token,
 			Name = "Mario",
@@ -331,7 +333,7 @@ public class TestUserController
 	{
 		(Guid id, string token) = await CreateInvitedUserAsync("accept-setsactive@five68.com");
 
-		await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
+		await _client.PostAsJsonAsync("/user/invite/accept", new InviteAccept
 		{
 			Token = token,
 			Name = "Mario",
@@ -341,7 +343,7 @@ public class TestUserController
 			Password = "NewP@ss1!"
 		});
 
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		db.Users.First(u => u.Id == id).Status.Should().Be(UserStatus.Active);
 	}
@@ -351,7 +353,7 @@ public class TestUserController
 	{
 		(Guid id, string token) = await CreateInvitedUserAsync("accept-clearstoken@five68.com");
 
-		await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
+		await _client.PostAsJsonAsync("/user/invite/accept", new InviteAccept
 		{
 			Token = token,
 			Name = "Mario",
@@ -361,7 +363,7 @@ public class TestUserController
 			Password = "NewP@ss1!"
 		});
 
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		User user = db.Users.First(u => u.Id == id);
 		user.InviteToken.Should().BeNull();
@@ -371,7 +373,7 @@ public class TestUserController
 	[Fact]
 	public async Task AcceptInvite_InvalidToken_Returns401()
 	{
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/invite/accept", new InviteAccept
 		{
 			Token = "not-a-valid-token",
 			Name = "Mario",
@@ -390,7 +392,7 @@ public class TestUserController
 		string token = await GenerateInviteForAsync(EmployeeEmail);
 		Guid id = GetUserId(EmployeeEmail);
 
-		using (IServiceScope scope = factory_.Services.CreateScope())
+		using (IServiceScope scope = _factory.Services.CreateScope())
 		{
 			Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 			User user = db.Users.First(u => u.Id == id);
@@ -398,7 +400,7 @@ public class TestUserController
 			db.SaveChanges();
 		}
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/invite/accept", new InviteAccept
 		{
 			Token = token,
 			Name = "Mario",
@@ -416,7 +418,7 @@ public class TestUserController
 	{
 		(_, string token) = await CreateInvitedUserAsync("accept-usedtwice@five68.com");
 
-		await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
+		await _client.PostAsJsonAsync("/user/invite/accept", new InviteAccept
 		{
 			Token = token,
 			Name = "Mario",
@@ -426,7 +428,7 @@ public class TestUserController
 			Password = "NewP@ss1!"
 		});
 
-		HttpResponseMessage replayResponse = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
+		HttpResponseMessage replayResponse = await _client.PostAsJsonAsync("/user/invite/accept", new InviteAccept
 		{
 			Token = token,
 			Name = "Mario",
@@ -442,7 +444,7 @@ public class TestUserController
 	[Fact]
 	public async Task AcceptInvite_MissingToken_Returns400()
 	{
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/invite/accept", new
 		{
 			Password = "NewP@ss1!"
 		});
@@ -455,7 +457,7 @@ public class TestUserController
 	{
 		string token = await GenerateInviteForAsync(EmployeeEmail);
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/invite/accept", new
 		{
 			Token = token
 		});
@@ -467,7 +469,7 @@ public class TestUserController
 	{
 		await AuthorizeAsAsync(AdminEmail);
 		Guid id = GetUserId(email);
-		HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
+		HttpResponseMessage response = await _client.PostAsync($"/user/{id}/invite", null);
 		Dictionary<string, string>? body = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
 		return body!["inviteToken"];
 	}
@@ -479,7 +481,7 @@ public class TestUserController
 	private async Task<(Guid id, string token)> CreateInvitedUserAsync(string email)
 	{
 		await AuthorizeAsAsync(AdminEmail);
-		await client_.PostAsJsonAsync("/user/signup", new UserRegister
+		await _client.PostAsJsonAsync("/user/signup", new UserRegister
 		{
 			Email = email,
 			Password = Password,
@@ -492,7 +494,7 @@ public class TestUserController
 
 	private async Task AuthorizeAsAsync(string email)
 	{
-		using (IServiceScope scope = factory_.Services.CreateScope())
+		using (IServiceScope scope = _factory.Services.CreateScope())
 		{
 			Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 			User user = db.Users.First(u => u.Email == email);
@@ -501,7 +503,7 @@ public class TestUserController
 			db.SaveChanges();
 		}
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/auth/login", new UserLogin
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/auth/login", new UserLogin
 		{
 			Email = email,
 			Password = Password,
@@ -509,12 +511,12 @@ public class TestUserController
 		string body = await response.Content.ReadAsStringAsync();
 		Assert.True(response.IsSuccessStatusCode, $"Login failed for {email}: {response.StatusCode} — {body}");
 		Tokens? tokens = JsonSerializer.Deserialize<Tokens>(body, _jsonOptions);
-		client_.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens!.AccessToken);
+		_client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens!.AccessToken);
 	}
 
 	private Guid GetUserId(string email)
 	{
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		return db.Users.First(u => u.Email == email).Id;
 	}

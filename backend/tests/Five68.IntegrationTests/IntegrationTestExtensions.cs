@@ -15,7 +15,7 @@ namespace Five68.IntegrationTests;
 public static class IntegrationTestExtensions
 {
 	private const string DefaultPassword = "ValidP@ss1!";
-	private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+	private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
 	public static void SeedUser(this Five68WebAppFactory factory, string email, UserRole role, string password = DefaultPassword)
 	{
@@ -108,7 +108,7 @@ public static class IntegrationTestExtensions
 		});
 		string body = await response.Content.ReadAsStringAsync();
 		Assert.True(response.IsSuccessStatusCode, $"Login failed for {email}: {response.StatusCode} — {body}");
-		Tokens? tokens = JsonSerializer.Deserialize<Tokens>(body, JsonOptions);
+		Tokens? tokens = JsonSerializer.Deserialize<Tokens>(body, _jsonOptions);
 		client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens!.AccessToken);
 	}
 }

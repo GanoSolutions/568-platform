@@ -11,29 +11,24 @@ namespace Five68.Controllers;
 [ApiController]
 public class AuthController : ControllerBase
 {
-	private readonly AuthService authService_;
-	private readonly ILogger logger_;
+	private readonly AuthService _authService;
 
-	public AuthController(AuthService authService, ILogger<AuthController> logger = null)
+	public AuthController(AuthService authService)
 	{
-		authService_ = authService;
-		logger_ = logger;
+		_authService = authService;
 	}
 
 	[HttpPost("login")]
 	public async Task<IActionResult> Login(UserLogin userData)
 	{
-		Tokens token = await authService_.Login(userData);
-
-		logger_.LogInformation("User " + userData.Email + " has logged in");
-
+		Tokens token = await _authService.Login(userData);
 		return Ok(token);
 	}
 
 	[HttpPost("refresh")]
 	public async Task<IActionResult> Refresh(Tokens token)
 	{
-		Tokens newJwtToken = await authService_.Refresh(token);
+		Tokens newJwtToken = await _authService.Refresh(token);
 		return Ok(newJwtToken);
 	}
 
@@ -45,12 +40,12 @@ public class AuthController : ControllerBase
 	public async Task<IActionResult> Logout()
 	{
 		string? email = User.FindFirst(ClaimTypes.Email)?.Value;
+
 		if (email is null)
+		{
 			return Unauthorized();
-
-		logger_?.LogInformation($"User {email} required logout");
-
-		await authService_.Logout(email);
+		}
+		await _authService.Logout(email);
 		return Ok();
 	}
 }

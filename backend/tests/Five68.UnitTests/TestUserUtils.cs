@@ -8,7 +8,7 @@ namespace Five68.UnitTests;
 
 public class TestUserUtils
 {
-	private readonly UserUtils sut_;
+	private readonly UserUtils _sut;
 
 	public TestUserUtils()
 	{
@@ -25,7 +25,7 @@ public class TestUserUtils
 		});
 
 		PasswordValidatorService validator = new PasswordValidatorService(settings.Value.PasswordRequirements);
-		sut_ = new UserUtils(settings, validator);
+		_sut = new UserUtils(settings, validator);
 	}
 
 	// --- HashAndCheckPassword ---
@@ -35,7 +35,7 @@ public class TestUserUtils
 	{
 		string password = "ValidP@ss1!";
 
-		string hash = sut_.HashAndCheckPassword(password);
+		string hash = _sut.HashAndCheckPassword(password);
 
 		BCrypt.Net.BCrypt.Verify(password, hash).Should().BeTrue();
 	}
@@ -44,8 +44,8 @@ public class TestUserUtils
 	public void HashAndCheckPassword_SamePasswordTwice_ReturnsDifferentHashes()
 	{
 		// BCrypt generates different salt each time
-		string hash1 = sut_.HashAndCheckPassword("ValidP@ss1!");
-		string hash2 = sut_.HashAndCheckPassword("ValidP@ss1!");
+		string hash1 = _sut.HashAndCheckPassword("ValidP@ss1!");
+		string hash2 = _sut.HashAndCheckPassword("ValidP@ss1!");
 
 		hash1.Should().NotBe(hash2);
 	}
@@ -53,7 +53,7 @@ public class TestUserUtils
 	[Fact]
 	public void HashAndCheckPassword_WeakPassword_ThrowsArgumentException()
 	{
-		Action act = () => sut_.HashAndCheckPassword("1234");
+		Action act = () => _sut.HashAndCheckPassword("1234");
 
 		act.Should().Throw<ArgumentException>();
 	}
@@ -72,7 +72,7 @@ public class TestUserUtils
 			PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4)
 		};
 
-		sut_.CheckPassword(user, password).Should().BeTrue();
+		_sut.CheckPassword(user, password).Should().BeTrue();
 	}
 
 	[Fact]
@@ -86,7 +86,7 @@ public class TestUserUtils
 			PasswordHash = BCrypt.Net.BCrypt.HashPassword("Correct@1!", workFactor: 4)
 		};
 
-		sut_.CheckPassword(user, "Wrong@1!").Should().BeFalse();
+		_sut.CheckPassword(user, "Wrong@1!").Should().BeFalse();
 	}
 
 	[Fact]
@@ -100,7 +100,7 @@ public class TestUserUtils
 			PasswordHash = null  // utente Pending, non ha ancora settato la password
 		};
 
-		Action act = () => sut_.CheckPassword(user, "AnyP@ss1!");
+		Action act = () => _sut.CheckPassword(user, "AnyP@ss1!");
 
 		// BCrypt.Verify esplode se l'hash è null — comportamento atteso
 		act.Should().Throw<Exception>();
