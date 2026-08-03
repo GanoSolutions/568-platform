@@ -13,7 +13,7 @@ public class UserService
 	private readonly EmployeeFacade _employeeFacade;
 	private readonly UserUtils _userUtils;
 	private readonly INotificationService _notificationService;
-	private ILogger _logger;
+	private readonly ILogger _logger;
 
 	public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, INotificationService notificationService, ILogger<UserService> logger)
 	{

@@ -10,7 +10,7 @@ public class ShiftService
 	private readonly ShiftFacade _shiftFacade;
 	private readonly UserFacade _userFacade;
 	private readonly EmployeeFacade _employeeFacade;
-	private ILogger _logger;
+	private readonly ILogger _logger;
 
 	public ShiftService(
 		ShiftFacade shiftFacade,

@@ -7,12 +7,12 @@ namespace Five68.Services;
 
 public class SwapRequestService
 {
-	private INotificationService _notificationService;
+	private readonly INotificationService _notificationService;
 	private readonly SwapRequestFacade _swapRequestFacade;
 	private readonly ShiftFacade _shiftFacade;
 	private readonly EmployeeFacade _employeeFacade;
 	private readonly UserFacade _userFacade;
-	private ILogger _logger;
+	private readonly ILogger _logger;
 
 	private enum SwapRequestAction
 	{
