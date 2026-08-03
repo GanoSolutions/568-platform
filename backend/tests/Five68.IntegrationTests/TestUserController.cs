@@ -228,7 +228,7 @@ public class TestUserController
 		await AuthorizeAsAsync(AdminEmail);
 		HttpResponseMessage response = await _client.PostAsJsonAsync("/user/signup", new
 		{
-			Password = Password,
+			Password,
 			Role = UserRole.Employee,
 		});
 

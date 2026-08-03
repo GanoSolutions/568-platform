@@ -256,7 +256,7 @@ public class TestAuthController
 
 		HttpResponseMessage response = await _client.PostAsJsonAsync("/auth/refresh", new
 		{
-			RefreshToken = tokens.RefreshToken
+			tokens.RefreshToken
 		});
 
 		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -269,7 +269,7 @@ public class TestAuthController
 
 		HttpResponseMessage response = await _client.PostAsJsonAsync("/auth/refresh", new
 		{
-			AccessToken = tokens.AccessToken
+			tokens.AccessToken
 		});
 
 		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
