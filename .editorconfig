@@ -275,6 +275,9 @@ dotnet_diagnostic.IDE0058.severity = none
 # optimization for this project's log volume; the boilerplate cost (every
 # logging class must become `partial`) isn't worth it here.
 dotnet_diagnostic.CA1848.severity = none
+# CA1873 flags the same LoggerExtensions boxing/allocation overhead as CA1848
+# and recommends the same LoggerMessage fix — same reasoning, same call.
+dotnet_diagnostic.CA1873.severity = none
 
 # Test method names follow the MethodUnderTest_Scenario_ExpectedResult convention,
 # which relies on underscores for readability — CA1707 only applies to test code.
