@@ -74,7 +74,7 @@ public class UserService
 
 		await _userFacade.UpdateAsync(user);
 		await _notificationService.SendInviteAsync(user.Email, token);
-		_logger.LogInformation($"User {requester.Email} invited {user.Email} to change password");
+		_logger.LogInformation("User {RequesterEmail} invited {UserEmail} to change password", requester.Email, user.Email);
 		return token;
 	}
 
@@ -99,7 +99,7 @@ public class UserService
 		user.Status = UserStatus.Active;
 		user.InviteToken = null;
 		user.InviteTokenExpiry = null;
-		_logger.LogInformation($"User {user.Email} accepted invite");
+		_logger.LogInformation("User {UserEmail} accepted invite", user.Email);
 
 		await _userFacade.UpdateAsync(user);
 	}
@@ -107,7 +107,7 @@ public class UserService
 	public async Task CreateUser(UserRegister model, Guid userId)
 	{
 		User requester = await _userFacade.FindByIdAsync(userId) ?? throw new UnauthorizedException();
-		_logger.LogInformation($"User {requester.Email} requested signup of user {model.Email}");
+		_logger.LogInformation("User {RequesterEmail} requested signup of user {UserEmail}", requester.Email, model.Email);
 
 		if (model.Role <= requester.Role)
 		{
@@ -128,7 +128,7 @@ public class UserService
 			Role = model.Role,
 			Status = UserStatus.Disabled,
 		});
-		_logger.LogInformation($"User {model.Email} created by {requester.Email}");
+		_logger.LogInformation("User {UserEmail} created by {RequesterEmail}", model.Email, requester.Email);
 	}
 
 	public async Task ChangePassword(Guid userId, ChangePassword model)
@@ -142,6 +142,6 @@ public class UserService
 
 		user.PasswordHash = _userUtils.HashAndCheckPassword(model.NewPassword);
 		await _userFacade.UpdateAsync(user);
-		_logger.LogInformation($"User {user.Email} changed their password");
+		_logger.LogInformation("User {UserEmail} changed their password", user.Email);
 	}
 }

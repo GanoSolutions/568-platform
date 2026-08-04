@@ -61,7 +61,7 @@ public class ShiftService
 			CreatedBy = requesterId,
 		});
 
-		_logger.LogInformation($"User {requester.Email} created a {created.Duration} hours shift on {created.Date} for employee {created.Employee.Name} {created.Employee.Surname} starting at {created.StartTime}");
+		_logger.LogInformation("User {RequesterEmail} created a {Duration} hours shift on {Date} for employee {EmployeeName} {EmployeeSurname} starting at {StartTime}", requester.Email, created.Duration, created.Date, created.Employee.Name, created.Employee.Surname, created.StartTime);
 		return ShiftDTO.FromShift(created);
 	}
 
@@ -80,7 +80,7 @@ public class ShiftService
 
 		Shift updated = await _shiftFacade.UpdateAsync(shift);
 
-		_logger.LogInformation($"User {requester.Email} updated shift on {updated.Date} to a {updated.Duration} hours shift starting at {updated.StartTime}");
+		_logger.LogInformation("User {RequesterEmail} updated shift on {Date} to a {Duration} hours shift starting at {StartTime}", requester.Email, updated.Date, updated.Duration, updated.StartTime);
 		return ShiftDTO.FromShift(updated);
 	}
 
@@ -91,7 +91,7 @@ public class ShiftService
 		Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
 		await _shiftFacade.DeleteAsync(shift);
 
-		_logger.LogInformation($"User {requester.Email} deleted shift on {shift.Date} - {shift.StartTime}");
+		_logger.LogInformation("User {RequesterEmail} deleted shift on {Date} - {StartTime}", requester.Email, shift.Date, shift.StartTime);
 	}
 
 	private async Task<User> RequireManagerOrAdmin(Guid requesterId)

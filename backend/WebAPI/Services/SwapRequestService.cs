@@ -81,7 +81,7 @@ public class SwapRequestService
 		foreach (SwapRequest r in toCreate)
 		{
 			await _notificationService.NotifySwapRequestCreatedAsync(r);
-			_logger.LogInformation($"User {requesterId} requested a shift swap on {shift.Date} for {r.TargetEmployeeId}");
+			_logger.LogInformation("User {RequesterId} requested a shift swap on {Date} for {TargetEmployeeId}", requesterId, shift.Date, r.TargetEmployeeId);
 		}
 
 		return toCreate.Select(SwapRequestDTO.FromSwapRequest);
@@ -103,7 +103,7 @@ public class SwapRequestService
 		}
 
 		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-		_logger.LogInformation($"User {requesterId} accepted swap request {swapRequestId}");
+		_logger.LogInformation("User {RequesterId} accepted swap request {SwapRequestId}", requesterId, swapRequestId);
 		await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
 		return SwapRequestDTO.FromSwapRequest(await _swapRequestFacade.FindByIdAsync(swapRequestId));
@@ -119,7 +119,7 @@ public class SwapRequestService
 		}
 
 		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-		_logger.LogInformation($"User {requesterId} rejected swap request {swapRequestId}");
+		_logger.LogInformation("User {RequesterId} rejected swap request {SwapRequestId}", requesterId, swapRequestId);
 		await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
 		return SwapRequestDTO.FromSwapRequest(updated);
@@ -135,7 +135,7 @@ public class SwapRequestService
 		}
 
 		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-		_logger.LogInformation($"User {requesterId} cancelled swap request {swapRequestId}");
+		_logger.LogInformation("User {RequesterId} cancelled swap request {SwapRequestId}", requesterId, swapRequestId);
 		await _notificationService.NotifySwapRequestCancelledAsync(updated);
 
 		return SwapRequestDTO.FromSwapRequest(updated);

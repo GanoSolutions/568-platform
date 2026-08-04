@@ -13,26 +13,26 @@ public class NoOpNotificationService : INotificationService
 
 	public Task NotifySwapRequestCancelledAsync(SwapRequest request)
 	{
-		_logger.LogInformation($"Swap request {request.Id} cancelled");
+		_logger.LogInformation("Swap request {SwapRequestId} cancelled", request.Id);
 		return Task.CompletedTask;
 	}
 
 	public Task NotifySwapRequestCreatedAsync(SwapRequest request)
 	{
-		_logger.LogInformation($"Swap request {request.Id} created: shift: {request.ShiftId}, requester: {request.RequesterId} for {request.TargetEmployeeId}");
+		_logger.LogInformation("Swap request {SwapRequestId} created: shift: {ShiftId}, requester: {RequesterId} for {TargetEmployeeId}", request.Id, request.ShiftId, request.RequesterId, request.TargetEmployeeId);
 		return Task.CompletedTask;
 	}
 
 	public Task NotifySwapRequestRespondedAsync(SwapRequest request)
 	{
-		_logger.LogInformation($"Swap request {request.Id} responded with status {request.Status}");
+		_logger.LogInformation("Swap request {SwapRequestId} responded with status {Status}", request.Id, request.Status);
 		return Task.CompletedTask;
 	}
 
 
 	public Task SendInviteAsync(string toEmail, string inviteLink)
 	{
-		_logger.LogInformation($"Invite for {toEmail} — link: {inviteLink}");
+		_logger.LogInformation("Invite for {ToEmail} — link: {InviteLink}", toEmail, inviteLink);
 		return Task.CompletedTask;
 	}
 }
