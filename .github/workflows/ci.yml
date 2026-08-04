@@ -43,7 +43,7 @@ jobs:
         working-directory: backend
         run: dotnet format Five68Platform.slnx --verify-no-changes
 
-      - name: Build solution (analyzer warnings visible in log)
+      - name: Build solution
         working-directory: backend
         run: dotnet build Five68Platform.slnx
 

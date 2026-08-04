@@ -15,8 +15,8 @@ services:
   backend:
     container_name: backend
     build:
-      context: backend/
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         BUILD_ENV: Debug
     volumes:
@@ -32,24 +32,24 @@ services:
     hostname: db_init
     profiles: [ init ]
     build:
-      context: backend/
-      dockerfile: Five68Initializer/Dockerfile
+      context: .
+      dockerfile: backend/Five68Initializer/Dockerfile
     depends_on:
       - Five68-db
 
   unit-tests:
     profiles: [ test ]
     build:
-      context: backend/
-      dockerfile: tests/Dockerfile
+      context: .
+      dockerfile: backend/tests/Dockerfile
       args:
         TEST_PROJECT: Five68.UnitTests
 
   integration-tests:
     profiles: [ test ]
     build:
-      context: backend/
-      dockerfile: tests/Dockerfile
+      context: .
+      dockerfile: backend/tests/Dockerfile
       args:
         TEST_PROJECT: Five68.IntegrationTests
     environment:
