@@ -7,6 +7,7 @@ using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
 namespace Five68.Controllers;
 
+/// <summary>Shifts: lookup, creation, updates, deletion.</summary>
 [Route("[controller]")]
 [ApiController]
 [Authorize]
@@ -14,6 +15,7 @@ public class ShiftController : Controller
 {
 	private readonly ShiftService _shiftService;
 
+	/// <summary>Creates the controller with its required service.</summary>
 	public ShiftController(ShiftService shiftService)
 	{
 		_shiftService = shiftService;

@@ -289,3 +289,29 @@ dotnet_diagnostic.CA1873.severity = none
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1711.severity = none
 dotnet_diagnostic.CA1806.severity = none
+
+# CS1591 (missing XML doc comment) matters only where Swagger reads it —
+# Controllers and request/response DTOs. Internal-only code (Services,
+# Facades, Exceptions, Utils, EF entities, Program/AppSettings/DbContext)
+# is never serialized into the OpenAPI schema, so documenting it would be
+# busywork with no visible payoff.
+[backend/WebAPI/Services/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Facades/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Exceptions/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Utils/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Models/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Models/Authentication/UserRefreshTokens.cs]
+dotnet_diagnostic.CS1591.severity = none

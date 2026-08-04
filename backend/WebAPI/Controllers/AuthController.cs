@@ -7,17 +7,20 @@ using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
 namespace Five68.Controllers;
 
+/// <summary>Authentication: login, token refresh, logout.</summary>
 [Route("[controller]")]
 [ApiController]
 public class AuthController : ControllerBase
 {
 	private readonly AuthService _authService;
 
+	/// <summary>Creates the controller with its required service.</summary>
 	public AuthController(AuthService authService)
 	{
 		_authService = authService;
 	}
 
+	/// <summary>Logs in with email and password, returning an access/refresh token pair.</summary>
 	[HttpPost("login")]
 	public async Task<IActionResult> Login(UserLogin userData)
 	{
@@ -25,6 +28,7 @@ public class AuthController : ControllerBase
 		return Ok(token);
 	}
 
+	/// <summary>Exchanges a valid refresh token for a new access/refresh token pair.</summary>
 	[HttpPost("refresh")]
 	public async Task<IActionResult> Refresh(Tokens token)
 	{

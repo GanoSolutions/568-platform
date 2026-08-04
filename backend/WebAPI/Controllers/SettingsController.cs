@@ -5,6 +5,7 @@ using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
 namespace Five68.Controllers;
 
+/// <summary>Platform settings: closed days.</summary>
 [Route("[controller]")]
 [ApiController]
 [Authorize]
@@ -12,6 +13,7 @@ public class SettingsController : Controller
 {
 	private readonly SettingsService _settingsService;
 
+	/// <summary>Creates the controller with its required service.</summary>
 	public SettingsController(SettingsService settingsService)
 	{
 		_settingsService = settingsService;

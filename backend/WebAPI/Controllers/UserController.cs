@@ -8,12 +8,14 @@ using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
 namespace Five68.Controllers;
 
+/// <summary>User accounts: lookup, signup, invites, password changes.</summary>
 [Route("[controller]")]
 [ApiController]
 [Authorize]
 public class UserController : Controller
 {
 	private readonly UserService _userService;
+	/// <summary>Creates the controller with its required service.</summary>
 	public UserController(UserService userService)
 	{
 		_userService = userService;

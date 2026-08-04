@@ -8,6 +8,7 @@ using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
 namespace Five68.Controllers;
 
+/// <summary>Shift swap requests: creation and responses (accept/reject/cancel).</summary>
 [Route("[controller]")]
 [ApiController]
 [Authorize]
@@ -16,6 +17,7 @@ public class SwapRequestController : Controller
 	private readonly SwapRequestService _swapRequestService;
 	private readonly UserService _userService;
 
+	/// <summary>Creates the controller with its required services.</summary>
 	public SwapRequestController(SwapRequestService swapRequestService, UserService userService)
 	{
 		_swapRequestService = swapRequestService;
