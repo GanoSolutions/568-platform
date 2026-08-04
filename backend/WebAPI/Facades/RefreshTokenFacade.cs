@@ -1,42 +1,41 @@
 using Five68.Models.Authentication;
 using Microsoft.EntityFrameworkCore;
 
-namespace Five68.Facades
+namespace Five68.Facades;
+
+public class RefreshTokenFacade
 {
-	public class RefreshTokenFacade
+	private readonly Five68DbContext _context;
+
+	public RefreshTokenFacade(Five68DbContext context)
 	{
-		private readonly Five68DbContext db_;
+		_context = context;
+	}
 
-		public RefreshTokenFacade(Five68DbContext db)
+	public async Task UpsertUserRefreshTokens(UserRefreshTokens refreshTokens)
+	{
+		await DeleteUserRefreshTokens(refreshTokens.Email);
+		_context.RefreshTokens.Add(refreshTokens);
+		await _context.SaveChangesAsync();
+	}
+
+	public async Task<UserRefreshTokens?> ConsumeRefreshToken(string email)
+	{
+		UserRefreshTokens? token = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Email == email);
+		if (token is null)
 		{
-			db_ = db;
+			return null;
 		}
 
-		public async Task UpsertUserRefreshTokens(UserRefreshTokens refreshTokens)
-		{
-			await DeleteUserRefreshTokens(refreshTokens.Email);
-			db_.RefreshTokens.Add(refreshTokens);
-			await db_.SaveChangesAsync();
-		}
+		_context.RefreshTokens.Remove(token);
+		await _context.SaveChangesAsync();
+		return token;
+	}
 
-		public async Task<UserRefreshTokens?> ConsumeRefreshToken(string email)
-		{
-			UserRefreshTokens token = await db_.RefreshTokens.FirstOrDefaultAsync(x => x.Email == email);
-			if (token is null)
-			{
-				return null;
-			}
-
-			db_.RefreshTokens.Remove(token);
-			await db_.SaveChangesAsync();
-			return token;
-		}
-
-		public async Task DeleteUserRefreshTokens(string email)
-		{
-			await db_.RefreshTokens
-				.Where(x => x.Email == email)
-				.ExecuteDeleteAsync();
-		}
+	public async Task DeleteUserRefreshTokens(string email)
+	{
+		await _context.RefreshTokens
+			.Where(x => x.Email == email)
+			.ExecuteDeleteAsync();
 	}
 }

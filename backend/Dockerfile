@@ -5,11 +5,12 @@ ARG BUILD_ENV
 
 WORKDIR /src
 
-COPY WebAPI/*.csproj ./WebAPI/
-RUN dotnet restore WebAPI/WebAPI.csproj
+COPY backend/WebAPI/*.csproj ./backend/WebAPI/
+RUN dotnet restore backend/WebAPI/WebAPI.csproj
 
-COPY . .
-WORKDIR /src/WebAPI
+COPY .editorconfig ./.editorconfig
+COPY backend/ ./backend/
+WORKDIR /src/backend/WebAPI
 RUN dotnet publish -c $BUILD_ENV -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
@@ -18,6 +19,6 @@ ENV DOTNET_RUNNING_ENVIRONMENT=$BUILD_ENV
 
 WORKDIR /app
 COPY --from=build /app/publish .
-COPY WebAPI/appsettings.json .
+COPY backend/WebAPI/appsettings.json .
 
 ENTRYPOINT ["dotnet", "WebAPI.dll"]

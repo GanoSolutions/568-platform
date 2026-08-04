@@ -1,21 +1,31 @@
-namespace Five68.Models.DTO
+namespace Five68.Models.DTO;
+
+/// <summary>A scheduled work shift.</summary>
+public class ShiftDTO
 {
-	public class ShiftDTO
+	/// <summary>Unique identifier.</summary>
+	public Guid Id { get; set; }
+	/// <summary>The date of the shift.</summary>
+	public DateOnly Date { get; set; }
+	/// <summary>The employee assigned to the shift.</summary>
+	public Guid EmployeeId { get; set; }
+	/// <summary>When the shift starts.</summary>
+	public TimeOnly StartTime { get; set; }
+	/// <summary>How long the shift lasts.</summary>
+	public TimeSpan Duration { get; set; }
+	/// <summary>The user who created the shift.</summary>
+	public Guid CreatedBy { get; set; }
+	/// <summary>When the shift was created.</summary>
+	public DateTimeOffset CreatedAt { get; set; }
+	/// <summary>When the shift was last updated.</summary>
+	public DateTimeOffset UpdatedAt { get; set; }
+
+	/// <summary>Maps a <see cref="Shift"/> entity to its DTO.</summary>
+	public static ShiftDTO? FromShift(Shift? shift)
 	{
-		public Guid Id { get; set; }
-		public DateOnly Date { get; set; }
-		public Guid EmployeeId { get; set; }
-		public TimeOnly StartTime { get; set; }
-		public TimeSpan Duration { get; set; }
-		public Guid CreatedBy { get; set; }
-		public DateTimeOffset CreatedAt { get; set; }
-		public DateTimeOffset UpdatedAt { get; set; }
-
-		public static ShiftDTO FromShift(Shift shift)
-		{
-			if (shift is null) return null;
-
-			return new ShiftDTO
+		return shift is null
+			? null
+			: new ShiftDTO
 			{
 				Id = shift.Id,
 				Date = shift.Date,
@@ -26,7 +36,5 @@ namespace Five68.Models.DTO
 				CreatedAt = shift.CreatedAt,
 				UpdatedAt = shift.UpdatedAt
 			};
-
-		}
 	}
 }

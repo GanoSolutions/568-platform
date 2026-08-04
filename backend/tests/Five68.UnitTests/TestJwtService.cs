@@ -1,18 +1,19 @@
 using Five68.Models.Authentication;
 using Five68.Services;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Text;
 using NSubstitute;
-using Microsoft.Extensions.Logging;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace Five68.UnitTests;
 
 public class JwtServiceTests
 {
-	private readonly JwtService sut_;
+	private readonly JwtService _sut;
 
 	// Costanti condivise tra generazione e verifica
 	private const string Secret = "super-secret-key-at-least-32-bytes!!";
@@ -21,7 +22,7 @@ public class JwtServiceTests
 
 	public JwtServiceTests()
 	{
-		var settings = Options.Create(new AppSettings
+		IOptions<AppSettings> settings = Options.Create(new AppSettings
 		{
 			JWTSettings = new JWTSettings
 			{
@@ -32,14 +33,14 @@ public class JwtServiceTests
 			}
 		});
 
-		var logger = Substitute.For<ILogger<JwtService>>();
-		sut_ = new JwtService(settings, logger);
+		ILogger<JwtService> logger = Substitute.For<ILogger<JwtService>>();
+		_sut = new JwtService(settings, logger);
 	}
 
 	[Fact]
 	public void GenerateTokens_ValidInput_ReturnsBothTokens()
 	{
-		var tokens = sut_.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
+		Tokens tokens = _sut.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
 
 		tokens.AccessToken.Should().NotBeNullOrEmpty();
 		tokens.RefreshToken.Should().NotBeNullOrEmpty();
@@ -48,11 +49,11 @@ public class JwtServiceTests
 	[Fact]
 	public void GenerateTokens_AccessToken_ContainsCorrectEmailClaim()
 	{
-		var email = "admin@five68.com";
-		var tokens = sut_.GenerateTokens(Guid.NewGuid(), email);
+		string email = "admin@five68.com";
+		Tokens tokens = _sut.GenerateTokens(Guid.NewGuid(), email);
 
-		var handler = new JwtSecurityTokenHandler();
-		var jwt = handler.ReadJwtToken(tokens.AccessToken);
+		JwtSecurityTokenHandler handler = new();
+		JwtSecurityToken jwt = handler.ReadJwtToken(tokens.AccessToken);
 
 		jwt.Claims
 			.First(c => c.Type == JwtRegisteredClaimNames.Email)
@@ -62,10 +63,10 @@ public class JwtServiceTests
 	[Fact]
 	public void GenerateTokens_AccessToken_IsValidSignature()
 	{
-		var tokens = sut_.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
+		Tokens tokens = _sut.GenerateTokens(Guid.NewGuid(), "admin@five68.com");
 
-		var handler = new JwtSecurityTokenHandler();
-		var validationParams = new TokenValidationParameters
+		JwtSecurityTokenHandler handler = new();
+		TokenValidationParameters validationParams = new()
 		{
 			ValidateIssuerSigningKey = true,
 			IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)),
@@ -77,7 +78,7 @@ public class JwtServiceTests
 			ClockSkew = TimeSpan.Zero
 		};
 
-		var act = () => handler.ValidateToken(tokens.AccessToken, validationParams, out _);
+		Func<ClaimsPrincipal> act = () => handler.ValidateToken(tokens.AccessToken, validationParams, out _);
 
 		act.Should().NotThrow();
 	}
@@ -85,9 +86,9 @@ public class JwtServiceTests
 	[Fact]
 	public void GenerateTokens_TwoCallsSameUser_ReturnDifferentRefreshTokens()
 	{
-		var id = Guid.NewGuid();
-		var t1 = sut_.GenerateTokens(id, "admin@five68.com");
-		var t2 = sut_.GenerateTokens(id, "admin@five68.com");
+		Guid id = Guid.NewGuid();
+		Tokens t1 = _sut.GenerateTokens(id, "admin@five68.com");
+		Tokens t2 = _sut.GenerateTokens(id, "admin@five68.com");
 
 		t1.RefreshToken.Should().NotBe(t2.RefreshToken);
 	}
@@ -95,7 +96,7 @@ public class JwtServiceTests
 	[Fact]
 	public void Constructor_SecretTooShort_ThrowsInvalidOperationException()
 	{
-		var badSettings = Options.Create(new AppSettings
+		IOptions<AppSettings> badSettings = Options.Create(new AppSettings
 		{
 			JWTSettings = new JWTSettings { Secret = "short", ExpiryMinutes = 60 }
 		});

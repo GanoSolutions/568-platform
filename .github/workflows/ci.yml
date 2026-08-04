@@ -1,0 +1,150 @@
+name: Five68-CI
+
+# only pull_request: jobs run on each PR open/update to main, but NOT after
+# merge (avoiding re-executing same pipeline wasting time)
+# The trigger "push: branches: [main]" will be added only with future CD/tagging jobs
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft != true
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint
+        working-directory: backend
+        run: dotnet format Five68Platform.slnx --verify-no-changes
+
+      - name: Build solution
+        working-directory: backend
+        run: dotnet build Five68Platform.slnx
+
+      - name: Build image
+        run: docker compose build backend
+
+      - name: Unit tests
+        run: docker compose run unit-tests
+
+      - name: Integration tests
+        run: docker compose run integration-tests
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test
+        working-directory: frontend
+        run: npm run test
+
+      - name: Build image
+        run: docker compose build frontend
+
+# ============================================================
+  # FASE FUTURA — CD (da attivare quando il server proprietario sarà
+  # disponibile). Serviranno 3 secrets nel repo: DEPLOY_HOST,
+  # DEPLOY_USER, DEPLOY_SSH_KEY. Cambiare macchina in futuro = toccare
+  # solo questi 3 secrets, non questa logica.
+  # ============================================================
+  # deploy:
+  #   needs: [backend, frontend]
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Build and push image to GHCR
+  #       run: |
+  #         echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+  #         docker compose build backend
+  #         docker tag <image> ghcr.io/${{ github.repository }}/backend:latest
+  #         docker push ghcr.io/${{ github.repository }}/backend:latest
+  #     - name: Deploy over SSH
+  #       uses: appleboy/ssh-action@v1
+  #       with:
+  #         host: ${{ secrets.DEPLOY_HOST }}
+  #         username: ${{ secrets.DEPLOY_USER }}
+  #         key: ${{ secrets.DEPLOY_SSH_KEY }}
+  #         script: |
+  #           cd /path/to/app
+  #           docker compose pull
+  #           docker compose up -d
+
+  # ============================================================
+  # FASE FUTURA — divisione branch `development`/`main` release-ready
+  # + tagging automatico (da attivare solo quando si è pronti per la
+  # prima release). Ispirato al vecchio .gitlab-ci.yml dell'utente
+  # (job check_duplicate_tag + push_tag), versione da
+  # backend/WebAPI/WebAPI.csproj <Version>.
+  # ============================================================
+  # check-duplicate-tag:
+  #   if: >
+  #     github.event_name == 'pull_request' &&
+  #     github.event.pull_request.base.ref == 'main' &&
+  #     github.event.pull_request.head.ref == 'development'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Check version tag does not already exist
+  #       run: |
+  #         VERSION=$(grep -oP '<Version>\K.*?(?=</Version>)' backend/WebAPI/WebAPI.csproj)
+  #         if git ls-remote --tags origin | grep -q "refs/tags/v$VERSION$"; then
+  #           echo "Tag v$VERSION already exists. Bump the version before merging."
+  #           exit 1
+  #         fi
+  #
+  # push-tag:
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Create and push version tag
+  #       run: |
+  #         VERSION=$(grep -oP '<Version>\K.*?(?=</Version>)' backend/WebAPI/WebAPI.csproj)
+  #         git config user.email "github-actions[bot]@users.noreply.github.com"
+  #         git config user.name "github-actions[bot]"
+  #         git tag -a "v$VERSION" -m "Version created by CI on main merge"
+  #         git push origin "v$VERSION"

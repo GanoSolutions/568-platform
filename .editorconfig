@@ -30,6 +30,7 @@ trim_trailing_whitespace = false
 [*.cs]
 
 #### Core EditorConfig Options ####
+dotnet_analyzer_diagnostic.severity = warning
 
 # Indentation and spacing
 indent_size = 4
@@ -37,7 +38,6 @@ indent_style = tab
 tab_width = 4
 
 # New line preferences
-end_of_line = crlf
 insert_final_newline = false
 
 #### .NET Coding Conventions ####
@@ -101,9 +101,9 @@ dotnet_style_allow_statement_immediately_after_block_experimental = true
 #### C# Coding Conventions ####
 
 # var preferences
-csharp_style_var_elsewhere = false:warning
-csharp_style_var_for_built_in_types = false:warning
-csharp_style_var_when_type_is_apparent = false:warning
+csharp_style_var_elsewhere = false
+csharp_style_var_for_built_in_types = false
+csharp_style_var_when_type_is_apparent = false
 
 # Expression-bodied members
 csharp_style_expression_bodied_accessors = true
@@ -133,7 +133,7 @@ csharp_preferred_modifier_order = public,private,protected,internal,static,exter
 # Code-block preferences
 csharp_prefer_braces = true
 csharp_prefer_simple_using_statement = true
-csharp_style_namespace_declarations = block_scoped
+csharp_style_namespace_declarations = file_scoped
 csharp_style_prefer_method_group_conversion = true
 csharp_style_prefer_top_level_statements = true
 
@@ -270,3 +270,48 @@ dotnet_diagnostic.IDE0063.severity = none
 dotnet_diagnostic.IDE0290.severity = none
 dotnet_diagnostic.IDE0028.severity = none
 dotnet_diagnostic.IDE0305.severity = none
+dotnet_diagnostic.IDE0058.severity = none
+# CA1848 (use LoggerMessage source-generated delegates) is a marginal perf
+# optimization for this project's log volume; the boilerplate cost (every
+# logging class must become `partial`) isn't worth it here.
+dotnet_diagnostic.CA1848.severity = none
+# CA1873 flags the same LoggerExtensions boxing/allocation overhead as CA1848
+# and recommends the same LoggerMessage fix — same reasoning, same call.
+dotnet_diagnostic.CA1873.severity = none
+
+# Test method names follow the MethodUnderTest_Scenario_ExpectedResult convention,
+# which relies on underscores for readability — CA1707 only applies to test code.
+# CA1711 flags xUnit's own "XCollection" naming idiom for collection fixtures
+# ([CollectionDefinition] + ICollectionFixture<T>), which isn't a real ICollection<T>.
+# CA1806 flags "new Foo(...)" with a discarded result inside Assert.Throws/
+# Should().Throw() lambdas, where discarding the instance is the point of the test.
+[backend/tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1711.severity = none
+dotnet_diagnostic.CA1806.severity = none
+
+# CS1591 (missing XML doc comment) matters only where Swagger reads it —
+# Controllers and request/response DTOs. Internal-only code (Services,
+# Facades, Exceptions, Utils, EF entities, Program/AppSettings/DbContext)
+# is never serialized into the OpenAPI schema, so documenting it would be
+# busywork with no visible payoff.
+[backend/WebAPI/Services/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Facades/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Exceptions/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Utils/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Models/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
+[backend/WebAPI/Models/Authentication/UserRefreshTokens.cs]
+dotnet_diagnostic.CS1591.severity = none
