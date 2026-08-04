@@ -16,6 +16,11 @@ export function getAppHubConnection(): signalR.HubConnection {
 		connection = new signalR.HubConnectionBuilder()
 			.withUrl(`${API_BASE}${APP_HUB_PATH}`, {
 				accessTokenFactory: () => getAccessToken() ?? '',
+				// Il client SignalR manda credentials 'include' di default: con la CORS
+				// policy del backend (AllowAnyOrigin, niente AllowCredentials) il browser
+				// blocca ogni risposta ("Failed to fetch"). Non servono cookie, l'auth
+				// passa dal Bearer token via accessTokenFactory.
+				withCredentials: false,
 			})
 			.withAutomaticReconnect()
 			.configureLogging(signalR.LogLevel.Warning)
