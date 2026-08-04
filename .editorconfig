@@ -271,6 +271,10 @@ dotnet_diagnostic.IDE0290.severity = none
 dotnet_diagnostic.IDE0028.severity = none
 dotnet_diagnostic.IDE0305.severity = none
 dotnet_diagnostic.IDE0058.severity = none
+# CA1848 (use LoggerMessage source-generated delegates) is a marginal perf
+# optimization for this project's log volume; the boilerplate cost (every
+# logging class must become `partial`) isn't worth it here.
+dotnet_diagnostic.CA1848.severity = none
 
 # Test method names follow the MethodUnderTest_Scenario_ExpectedResult convention,
 # which relies on underscores for readability — CA1707 only applies to test code.
