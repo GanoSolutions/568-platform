@@ -17,6 +17,6 @@ public class SettingsService
 	{
 		return end < start
 			? throw new EntityException("La data di fine deve essere successiva alla data di inizio")
-			: (await _settingsFacade.GetClosedDaysByDateRangeAsync(start, end)).Select(ClosedDayDTO.FromClosedDay);
+			: (await _settingsFacade.GetClosedDaysByDateRangeAsync(start, end)).Select(cd => ClosedDayDTO.FromClosedDay(cd)!);
 	}
 }

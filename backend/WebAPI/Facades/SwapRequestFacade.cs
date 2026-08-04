@@ -32,7 +32,7 @@ public class SwapRequestFacade
 		await _context.SaveChangesAsync();
 	}
 
-	internal async Task<SwapRequest> FindByIdAsync(Guid id)
+	internal async Task<SwapRequest?> FindByIdAsync(Guid id)
 	{
 		// AsNoTracking: gli update in questa Facade passano sempre da ExecuteUpdateAsync
 		// (bypassa il change tracker), quindi una lettura tracciata rischierebbe di restituire
@@ -40,7 +40,7 @@ public class SwapRequestFacade
 		return await _context.SwapRequests.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
 	}
 
-	internal async Task<SwapRequest> FindPendingByShiftAndTargetAsync(Guid shiftId, Guid targetEmployeeId)
+	internal async Task<SwapRequest?> FindPendingByShiftAndTargetAsync(Guid shiftId, Guid targetEmployeeId)
 	{
 		return await _context.SwapRequests.AsNoTracking().FirstOrDefaultAsync(x => x.ShiftId == shiftId
 			&& x.TargetEmployeeId == targetEmployeeId

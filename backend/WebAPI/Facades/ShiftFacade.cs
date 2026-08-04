@@ -33,13 +33,13 @@ public class ShiftFacade
 		await _context.SaveChangesAsync();
 	}
 
-	internal async Task<Shift> FindByIdAsync(Guid id)
+	internal async Task<Shift?> FindByIdAsync(Guid id)
 	{
 		return await _context.Shifts
 			.FirstOrDefaultAsync(x => x.Id == id);
 	}
 
-	internal async Task<Shift> FindByDateAndEmployeeAsync(DateOnly date, Guid employeeId)
+	internal async Task<Shift?> FindByDateAndEmployeeAsync(DateOnly date, Guid employeeId)
 	{
 		return await _context.Shifts
 			.FirstOrDefaultAsync(x => x.Date == date && x.EmployeeId == employeeId);

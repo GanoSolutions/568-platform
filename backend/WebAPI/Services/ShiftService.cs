@@ -24,7 +24,7 @@ public class ShiftService
 		_logger = logger;
 	}
 
-	public async Task<ShiftDTO> GetById(Guid id)
+	public async Task<ShiftDTO?> GetById(Guid id)
 	{
 		return ShiftDTO.FromShift(await _shiftFacade.FindByIdAsync(id));
 	}
@@ -33,7 +33,7 @@ public class ShiftService
 	{
 		return end < start
 			? throw new EntityException("La data di fine deve essere successiva alla data di inizio")
-			: (await _shiftFacade.GetByDateRangeAsync(start, end)).Select(ShiftDTO.FromShift);
+			: (await _shiftFacade.GetByDateRangeAsync(start, end)).Select(s => ShiftDTO.FromShift(s)!);
 	}
 
 	public async Task<ShiftDTO> Create(ShiftCreate model, Guid requesterId)
@@ -45,7 +45,7 @@ public class ShiftService
 			throw new EntityException("Non è possibile assegnare un dipendente in un giorno di chiusura");
 		}
 
-		Shift existing = await _shiftFacade.FindByDateAndEmployeeAsync(model.Date, model.EmployeeId);
+		Shift? existing = await _shiftFacade.FindByDateAndEmployeeAsync(model.Date, model.EmployeeId);
 		if (existing is not null)
 		{
 			throw new EntityException("Il dipendente è già assegnato in questa data");
@@ -62,7 +62,7 @@ public class ShiftService
 		});
 
 		_logger.LogInformation("User {RequesterEmail} created a {Duration} hours shift on {Date} for employee {EmployeeName} {EmployeeSurname} starting at {StartTime}", requester.Email, created.Duration, created.Date, created.Employee.Name, created.Employee.Surname, created.StartTime);
-		return ShiftDTO.FromShift(created);
+		return ShiftDTO.FromShift(created)!;
 	}
 
 	public async Task<ShiftDTO> Update(Guid id, ShiftUpdate model, Guid requesterId)
@@ -81,7 +81,7 @@ public class ShiftService
 		Shift updated = await _shiftFacade.UpdateAsync(shift);
 
 		_logger.LogInformation("User {RequesterEmail} updated shift on {Date} to a {Duration} hours shift starting at {StartTime}", requester.Email, updated.Date, updated.Duration, updated.StartTime);
-		return ShiftDTO.FromShift(updated);
+		return ShiftDTO.FromShift(updated)!;
 	}
 
 	public async Task Delete(Guid id, Guid requesterId)

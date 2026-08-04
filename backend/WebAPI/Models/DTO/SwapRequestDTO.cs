@@ -12,7 +12,7 @@ public class SwapRequestDTO
 	public DateTimeOffset CreatedAt { get; set; }
 	public DateTimeOffset? RespondedAt { get; set; }
 
-	public static SwapRequestDTO FromSwapRequest(SwapRequest request)
+	public static SwapRequestDTO? FromSwapRequest(SwapRequest? request)
 	{
 		return request is null
 			? null
@@ -35,5 +35,5 @@ public class SwapRequestCreate
 	public Guid ShiftId { get; set; }
 	[Required]
 	[MinLength(1)]
-	public List<Guid> TargetEmployeeIds { get; set; }
+	public required List<Guid> TargetEmployeeIds { get; set; }
 }

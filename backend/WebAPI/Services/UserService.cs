@@ -24,12 +24,12 @@ public class UserService
 		_logger = logger;
 	}
 
-	public async Task<UserDTO> GetUserDTO(Guid id)
+	public async Task<UserDTO?> GetUserDTO(Guid id)
 	{
 		return UserDTO.FromUser(await _userFacade.FindByIdAsync(id));
 	}
 
-	public async Task<User> Get(Guid id)
+	public async Task<User?> Get(Guid id)
 	{
 		return await _userFacade.FindByIdAsync(id);
 	}
@@ -53,7 +53,7 @@ public class UserService
 
 	public async Task<IEnumerable<UserDTO>> GetAll()
 	{
-		return (await _userFacade.GetAll()).Select(UserDTO.FromUser);
+		return (await _userFacade.GetAll()).Select(u => UserDTO.FromUser(u)!);
 	}
 
 	public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
@@ -80,7 +80,7 @@ public class UserService
 
 	public async Task AcceptInvite(InviteAccept model)
 	{
-		User user = await _userFacade.FindByInviteTokenAsync(model.Token);
+		User? user = await _userFacade.FindByInviteTokenAsync(model.Token);
 		if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
 		{
 			throw new UnauthorizedException("Token di invito non valido o scaduto");
@@ -114,7 +114,7 @@ public class UserService
 			throw new ForbiddenException("Non puoi creare un utente con un ruolo uguale o superiore al tuo");
 		}
 
-		User existing = await _userFacade.FindByEmailAsync(model.Email);
+		User? existing = await _userFacade.FindByEmailAsync(model.Email);
 		if (existing is not null)
 		{
 			throw new EntityException("Email già in uso");

@@ -84,7 +84,7 @@ public class SwapRequestService
 			_logger.LogInformation("User {RequesterId} requested a shift swap on {Date} for {TargetEmployeeId}", requesterId, shift.Date, r.TargetEmployeeId);
 		}
 
-		return toCreate.Select(SwapRequestDTO.FromSwapRequest);
+		return toCreate.Select(r => SwapRequestDTO.FromSwapRequest(r)!);
 	}
 
 	public async Task<SwapRequestDTO> Accept(Guid swapRequestId, Guid requesterId)
@@ -102,11 +102,11 @@ public class SwapRequestService
 			throw new EntityException("Il collega ha già un turno assegnato in questa data");
 		}
 
-		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
+		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId) ?? throw new NotFoundException("Richiesta non trovata");
 		_logger.LogInformation("User {RequesterId} accepted swap request {SwapRequestId}", requesterId, swapRequestId);
 		await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
-		return SwapRequestDTO.FromSwapRequest(await _swapRequestFacade.FindByIdAsync(swapRequestId));
+		return SwapRequestDTO.FromSwapRequest(updated)!;
 	}
 
 	public async Task<SwapRequestDTO> Reject(Guid swapRequestId, Guid requesterId)
@@ -118,11 +118,11 @@ public class SwapRequestService
 			throw new EntityException("La richiesta è stata già gestita");
 		}
 
-		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
+		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId) ?? throw new NotFoundException("Richiesta non trovata");
 		_logger.LogInformation("User {RequesterId} rejected swap request {SwapRequestId}", requesterId, swapRequestId);
 		await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
-		return SwapRequestDTO.FromSwapRequest(updated);
+		return SwapRequestDTO.FromSwapRequest(updated)!;
 	}
 
 	public async Task<SwapRequestDTO> Cancel(Guid swapRequestId, Guid requesterId)
@@ -134,17 +134,17 @@ public class SwapRequestService
 			throw new EntityException("La richiesta è stata già gestita");
 		}
 
-		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
+		SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId) ?? throw new NotFoundException("Richiesta non trovata");
 		_logger.LogInformation("User {RequesterId} cancelled swap request {SwapRequestId}", requesterId, swapRequestId);
 		await _notificationService.NotifySwapRequestCancelledAsync(updated);
 
-		return SwapRequestDTO.FromSwapRequest(updated);
+		return SwapRequestDTO.FromSwapRequest(updated)!;
 	}
 
 	public async Task<IEnumerable<SwapRequestDTO>> GetForUser(Guid userId, UserRole role)
 	{
 		bool seeAll = role is UserRole.Admin or UserRole.Manager;
-		return (await _swapRequestFacade.GetForUserAsync(userId, seeAll)).Select(SwapRequestDTO.FromSwapRequest);
+		return (await _swapRequestFacade.GetForUserAsync(userId, seeAll)).Select(r => SwapRequestDTO.FromSwapRequest(r)!);
 	}
 
 	private async Task<SwapRequest> RequireCanAct(Guid swapRequestId, Guid requesterId, SwapRequestAction action)

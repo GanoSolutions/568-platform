@@ -37,7 +37,7 @@ public class SwapRequestController : Controller
 			return Unauthorized();
 		}
 
-		User user = await _userService.Get(requesterId);
+		User? user = await _userService.Get(requesterId);
 		return user is null ? Unauthorized() : Ok(await _swapRequestService.GetForUser(requesterId, user.Role));
 	}
 
@@ -88,7 +88,7 @@ public class SwapRequestController : Controller
 
 	private Guid GetRequesterId()
 	{
-		string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+		string? requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		return Guid.TryParse(requesterId, out Guid id) ? id : Guid.Empty;
 	}
 

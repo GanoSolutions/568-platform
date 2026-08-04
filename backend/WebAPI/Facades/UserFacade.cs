@@ -26,12 +26,12 @@ public class UserFacade
 		await _context.SaveChangesAsync();
 	}
 
-	internal async Task<User> FindByEmailAsync(string email)
+	internal async Task<User?> FindByEmailAsync(string email)
 	{
 		return await _context.Users.FirstOrDefaultAsync(x => x.Email == email);
 	}
 
-	internal async Task<User> FindByIdAsync(Guid id)
+	internal async Task<User?> FindByIdAsync(Guid id)
 	{
 		return await _context.Users
 			.Include(x => x.Employee)
@@ -45,7 +45,7 @@ public class UserFacade
 			.ToListAsync();
 	}
 
-	internal async Task<User> FindByInviteTokenAsync(string token)
+	internal async Task<User?> FindByInviteTokenAsync(string token)
 	{
 		return await _context.Users.FirstOrDefaultAsync(x => x.InviteToken == token);
 	}

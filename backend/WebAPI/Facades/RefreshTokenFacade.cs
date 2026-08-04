@@ -21,7 +21,7 @@ public class RefreshTokenFacade
 
 	public async Task<UserRefreshTokens?> ConsumeRefreshToken(string email)
 	{
-		UserRefreshTokens token = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Email == email);
+		UserRefreshTokens? token = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Email == email);
 		if (token is null)
 		{
 			return null;

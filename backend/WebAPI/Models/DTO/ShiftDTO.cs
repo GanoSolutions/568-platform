@@ -11,7 +11,7 @@ public class ShiftDTO
 	public DateTimeOffset CreatedAt { get; set; }
 	public DateTimeOffset UpdatedAt { get; set; }
 
-	public static ShiftDTO FromShift(Shift shift)
+	public static ShiftDTO? FromShift(Shift? shift)
 	{
 		return shift is null
 			? null

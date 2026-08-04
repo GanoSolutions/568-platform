@@ -30,7 +30,7 @@ public class UserController : Controller
 	public async Task<IActionResult> GetUserById(Guid id)
 	{
 
-		UserDTO user = await _userService.GetUserDTO(id);
+		UserDTO? user = await _userService.GetUserDTO(id);
 
 		return user is null ? NotFound() : Ok(user);
 	}
@@ -60,7 +60,7 @@ public class UserController : Controller
 	[HttpPost("signup")]
 	public async Task<IActionResult> Signup([FromBody] UserRegister model)
 	{
-		string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+		string? requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		if (!Guid.TryParse(requesterId, out Guid id))
 		{
 			return Unauthorized();
@@ -81,7 +81,7 @@ public class UserController : Controller
 	[HttpPost("{id:guid}/invite")]
 	public async Task<IActionResult> Invite(Guid id)
 	{
-		string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+		string? requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		if (!Guid.TryParse(requesterId, out Guid reqGuid))
 		{
 			return Unauthorized();
@@ -118,7 +118,7 @@ public class UserController : Controller
 	[HttpPost("password")]
 	public async Task<IActionResult> ChangePassword([FromBody] ChangePassword model)
 	{
-		string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+		string? requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		if (!Guid.TryParse(requesterId, out Guid id))
 		{
 			return Unauthorized();

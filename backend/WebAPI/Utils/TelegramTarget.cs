@@ -10,7 +10,7 @@ public class TelegramTarget : AsyncTaskTarget
 	private static readonly HttpClient _httpClient = new();
 	private const int MaxMessageLength = 1000;
 
-	public string BotToken { get; set; }
+	public required string BotToken { get; set; }
 	public List<string> ChatIds { get; set; } = [];
 
 	protected override async Task WriteAsyncTask(LogEventInfo logEvent, CancellationToken cancellationToken)

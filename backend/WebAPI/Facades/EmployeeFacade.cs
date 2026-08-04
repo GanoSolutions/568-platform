@@ -26,7 +26,7 @@ public class EmployeeFacade
 		await _context.SaveChangesAsync();
 	}
 
-	internal async Task<Employee> FindByIdAsync(Guid userId)
+	internal async Task<Employee?> FindByIdAsync(Guid userId)
 	{
 		return await _context.Employees.FirstOrDefaultAsync(x => x.UserId == userId);
 	}

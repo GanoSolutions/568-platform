@@ -29,7 +29,7 @@ public class ShiftController : Controller
 	[HttpGet("{id:guid}")]
 	public async Task<IActionResult> GetById(Guid id)
 	{
-		ShiftDTO dto = await _shiftService.GetById(id);
+		ShiftDTO? dto = await _shiftService.GetById(id);
 		return dto is null ? NotFound() : Ok(dto);
 	}
 
@@ -112,7 +112,7 @@ public class ShiftController : Controller
 
 	private Guid GetRequesterId()
 	{
-		string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+		string? requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		return Guid.TryParse(requesterId, out Guid id) ? id : Guid.Empty;
 	}
 }
