@@ -1,5 +1,5 @@
 // useCalendar.ts
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { settingsApi, shiftApi, type ShiftDTO } from '@/lib/apiClient';
 import { computeDuration, toBackendTime, toDisplayRange } from '@/lib/shiftTime';
 import type { ShiftData, ShiftEmployee } from '@/types';
@@ -89,8 +89,15 @@ export function useCalendar() {
 		const d = new Date(prev); d.setDate(d.getDate() + 7); return d;
 	});
 
-	const reloadCalendar = useCallback(async () => {
-		setLoading(true);
+	// Contatore di richiesta: se si cambia settimana più volte prima che una
+	// fetch precedente sia tornata, questo scarta il risultato di quella
+	// obsoleta invece di lasciarla sovrascrivere lo stato con dati di una
+	// settimana che non è più quella visualizzata.
+	const requestIdRef = useRef(0);
+
+	const reloadCalendar = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		const requestId = ++requestIdRef.current;
+		if (!silent) setLoading(true);
 		setError('');
 
 		try {
@@ -98,12 +105,14 @@ export function useCalendar() {
 				shiftApi.getByDateRange(weekRange.start, weekRange.end),
 				settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end),
 			]);
+			if (requestId !== requestIdRef.current) return;
 			setShifts(groupShiftsByDate(dtos));
 			setClosedDays(new Set(closedDayDtos.map(d => d.date)));
 		} catch (loadError) {
+			if (requestId !== requestIdRef.current) return;
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
 		} finally {
-			setLoading(false);
+			if (requestId === requestIdRef.current && !silent) setLoading(false);
 		}
 	}, [weekRange.start, weekRange.end]);
 
