@@ -14,7 +14,7 @@
   </ItemGroup>
 
 	<ItemGroup>
-    <None Include="..\WebAPI\appsettings.Development.json">
+    <None Include="..\WebAPI\appsettings.Development.json" Condition="Exists('..\WebAPI\appsettings.Development.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>appsettings.Development.json</Link>
     </None>

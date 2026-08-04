@@ -321,7 +321,7 @@ io/database
 frontend/.angular/*
 frontend/dist
 
-backend/**/appsettings.*.json
+backend/**/appsettings.Development.json
 !backend/WebAPI/appsettings.example.json
 !backend/WebAPI/appsettings.json
 
