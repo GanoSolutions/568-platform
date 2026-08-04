@@ -36,7 +36,7 @@ public class Program
 			"Environment: {0} | Loaded config keys: {1}",
 			builder.Environment.EnvironmentName,
 			string.Join(", ", builder.Configuration.AsEnumerable()
-				.Where(kv => kv.Key.StartsWith("Logging"))
+				.Where(kv => kv.Key.StartsWith("Logging", StringComparison.Ordinal))
 				.Select(kv => $"{kv.Key}={kv.Value}"))
 		);
 
