@@ -192,7 +192,7 @@ public class Program
 		services.AddControllers();
 	}
 
-	private static void InitializeLogger(IConfiguration configuration)
+	private static void InitializeLogger(ConfigurationManager configuration)
 	{
 		LoggingConfiguration config = new();
 		LogManager.Setup().RegisterNLogWeb();
