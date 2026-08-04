@@ -1,6 +1,7 @@
 // useCalendar.ts
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { settingsApi, shiftApi, type ShiftDTO } from '@/lib/apiClient';
+import { getAppHubConnection } from '@/lib/realtime';
 import { computeDuration, toBackendTime, toDisplayRange } from '@/lib/shiftTime';
 import type { ShiftData, ShiftEmployee } from '@/types';
 
@@ -77,8 +78,8 @@ export function useCalendar() {
 		const d = new Date(prev); d.setDate(d.getDate() + 7); return d;
 	});
 
-	const reloadCalendar = useCallback(async () => {
-		setLoading(true);
+	const reloadCalendar = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		if (!silent) setLoading(true);
 		setError('');
 
 		try {
@@ -91,12 +92,24 @@ export function useCalendar() {
 		} catch (loadError) {
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
 		} finally {
-			setLoading(false);
+			if (!silent) setLoading(false);
 		}
 	}, [weekRange.start, weekRange.end]);
 
 	useEffect(() => {
 		reloadCalendar();
+	}, [reloadCalendar]);
+
+	// Canale live: la connessione è di proprietà di RequestsContext (avvio/stop),
+	// qui ci si limita a sottoscrivere/annullare la sottoscrizione all'evento.
+	useEffect(() => {
+		const connection = getAppHubConnection();
+		connection.on('ShiftsChanged', () => {
+			reloadCalendar({ silent: true });
+		});
+		return () => {
+			connection.off('ShiftsChanged');
+		};
 	}, [reloadCalendar]);
 
 	const getShiftForDay = (date: Date): ShiftData | null => {

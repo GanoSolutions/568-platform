@@ -13,7 +13,8 @@ const MONTHS = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
 
 export default function Calendar() {
 	const { user } = useAuth();
-	const { pendingShiftIds, createSwapRequest } = useRequests();
+	const { pendingShiftIds, createSwapRequest, requests } = useRequests();
+	const pendingRequests = requests.filter(r => r.status === 'pending');
 	const {
 		weekDays,
 		currentMonday,
@@ -38,6 +39,12 @@ export default function Calendar() {
 	const closeShiftModal = () => {
 		setSelectedDay(null);
 		setSelectedEmployeeId(undefined);
+		setActionError('');
+	};
+
+	const closeCopyWeekModal = () => {
+		setCopyWeekOpen(false);
+		setActionError('');
 	};
 
 	const month = MONTHS[currentMonday.getMonth()];
@@ -72,7 +79,7 @@ export default function Calendar() {
 		setActionError('');
 		try {
 			await copyWeek(payload);
-			setCopyWeekOpen(false);
+			closeCopyWeekModal();
 		} catch (copyError) {
 			setActionError((copyError as Error).message || 'Copia settimana non riuscita');
 			throw copyError;
@@ -119,9 +126,11 @@ export default function Calendar() {
 				</div>
 			)}
 
-			{(calendarError || employeesError || actionError) && (
+			{/* Errori di caricamento pagina: gli errori delle azioni (actionError) sono già
+			    mostrati dentro la rispettiva modale, mostrarli anche qui li duplicherebbe. */}
+			{(calendarError || employeesError) && (
 				<div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{actionError || calendarError || employeesError}
+					{calendarError || employeesError}
 				</div>
 			)}
 
@@ -147,7 +156,7 @@ export default function Calendar() {
 				<CopyWeekModal
 					currentMonday={currentMonday}
 					onSubmit={handleCopyWeek}
-					onClose={() => setCopyWeekOpen(false)}
+					onClose={closeCopyWeekModal}
 					submitError={actionError}
 				/>
 			)}
@@ -171,6 +180,7 @@ export default function Calendar() {
 					shift={selectedShift}
 					employees={employees}
 					currentUser={user}
+					pendingRequests={pendingRequests}
 					onClose={closeShiftModal}
 					onSubmit={handleSwapRequest}
 					submitError={actionError}

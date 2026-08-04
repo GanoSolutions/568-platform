@@ -279,8 +279,11 @@ export default function Requests() {
 						return (
 							<div
 								key={request.id}
-								className="px-4 py-4 space-y-3"
-								style={{ backgroundColor: requester ? `${requester.color}12` : 'white' }}
+								className="px-4 py-4 space-y-3 border-l-4"
+								style={requester
+									? { backgroundColor: `${requester.color}26`, borderLeftColor: requester.color }
+									: { backgroundColor: 'white', borderLeftColor: 'transparent' }
+								}
 							>
 								<div className="flex items-start justify-between gap-3">
 									<div>

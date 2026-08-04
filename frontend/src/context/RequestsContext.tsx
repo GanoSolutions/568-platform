@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { swapRequestApi, SwapRequestStatus, type SwapRequestDTO, type SwapRequestStatusDTO } from '@/lib/apiClient';
+import { getAppHubConnection, signalR } from '@/lib/realtime';
 import type { SwapRequest } from '@/types';
 
 interface RequestsContextValue {
@@ -17,15 +17,6 @@ interface RequestsContextValue {
 }
 
 const RequestsContext = createContext<RequestsContextValue | null>(null);
-
-/**
- * Stopgap: il backend non ha (ancora) un canale realtime/websocket per le
- * swap request, quindi la lista viene ricaricata a intervalli mentre si è
- * sulla pagina Richieste. Da sostituire quando arriva un vero canale live
- * (vedi issue #47).
- */
-const POLL_INTERVAL_MS = 5000;
-const REQUESTS_PAGE_PATH = '/requests';
 
 function toFrontendStatus(status: SwapRequestStatusDTO): SwapRequest['status'] {
 	switch (status) {
@@ -52,8 +43,6 @@ function fromDTO(dto: SwapRequestDTO): SwapRequest {
 
 export function RequestsProvider({ children }: { children: ReactNode }) {
 	const { user, loading: authLoading } = useAuth();
-	const location = useLocation();
-	const isOnRequestsPage = location.pathname === REQUESTS_PAGE_PATH;
 	const [requests, setRequests] = useState<SwapRequest[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
@@ -80,12 +69,33 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 		reloadRequests();
 	}, [authLoading, user, reloadRequests]);
 
+	// Canale live: la connessione è condivisa con useCalendar (per ShiftsChanged),
+	// ma è questo provider — montato una volta sola a livello top-level e legato
+	// al ciclo di vita dell'autenticazione — a possederla (avvio qui, stop al logout
+	// gestito internamente da getAppHubConnection).
 	useEffect(() => {
-		if (authLoading || !user || !isOnRequestsPage) return;
+		if (authLoading || !user) return;
 
-		const intervalId = window.setInterval(() => reloadRequests({ silent: true }), POLL_INTERVAL_MS);
-		return () => window.clearInterval(intervalId);
-	}, [authLoading, user, isOnRequestsPage, reloadRequests]);
+		const connection = getAppHubConnection();
+		connection.on('SwapRequestsChanged', () => {
+			reloadRequests({ silent: true });
+		});
+		connection.onreconnected(() => {
+			reloadRequests({ silent: true });
+		});
+
+		if (connection.state === signalR.HubConnectionState.Disconnected) {
+			connection.start().catch(() => {
+				// Connessione iniziale fallita: il reloadRequests() al mount ha già
+				// popolato la lista, quindi non resta vuota. withAutomaticReconnect
+				// copre solo le cadute dopo una connessione riuscita.
+			});
+		}
+
+		return () => {
+			connection.off('SwapRequestsChanged');
+		};
+	}, [authLoading, user, reloadRequests]);
 
 	const createSwapRequest = async ({ shiftId, targetEmployeeIds }: { shiftId: string; targetEmployeeIds: string[] }) => {
 		setError('');
