@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Five68.Hubs;
 using Five68.Models;
 using Five68.Models.DTO;
 using FluentAssertions;
@@ -34,6 +35,12 @@ public class TestAppHub
 	}
 
 	private static async Task<bool> WaitAsync(TaskCompletionSource signal, TimeSpan timeout)
+	{
+		Task completed = await Task.WhenAny(signal.Task, Task.Delay(timeout));
+		return completed == signal.Task;
+	}
+
+	private static async Task<bool> WaitAsync<T>(TaskCompletionSource<T> signal, TimeSpan timeout)
 	{
 		Task completed = await Task.WhenAny(signal.Task, Task.Delay(timeout));
 		return completed == signal.Task;
@@ -101,14 +108,15 @@ public class TestAppHub
 		string token = client_.DefaultRequestHeaders.Authorization!.Parameter!;
 
 		await using HubConnection connection = BuildConnection(token);
-		TaskCompletionSource eventReceived = new();
-		connection.On("ShiftsChanged", () => eventReceived.TrySetResult());
+		TaskCompletionSource<ShiftChangedEvent> eventReceived = new();
+		connection.On<ShiftChangedEvent>("ShiftsChanged", payload => eventReceived.TrySetResult(payload));
 		await connection.StartAsync();
 
+		DateOnly shiftDate = new(2031, 8, 2);
 		HttpResponseMessage response = await client_.PostAsJsonAsync("/Shift", new ShiftCreate
 		{
 			EmployeeId = employeeId,
-			Date = new DateOnly(2031, 8, 2),
+			Date = shiftDate,
 			StartTime = new TimeOnly(9, 0),
 			Duration = TimeSpan.FromHours(8),
 		});
@@ -116,6 +124,7 @@ public class TestAppHub
 
 		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
 		received.Should().BeTrue("la creazione di un turno deve far arrivare l'evento ShiftsChanged");
+		eventReceived.Task.Result.Date.Should().Be(shiftDate);
 	}
 
 	[Fact]
@@ -123,14 +132,15 @@ public class TestAppHub
 	{
 		Guid managerId = factory_.GetUserId(ManagerEmail);
 		Guid employeeId = factory_.CreateEmployee("hub-shift-del-emp@five68.com");
-		Guid shiftId = factory_.SeedShift(employeeId, new DateOnly(2031, 8, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		DateOnly shiftDate = new(2031, 8, 3);
+		Guid shiftId = factory_.SeedShift(employeeId, shiftDate, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
 		await client_.AuthorizeAsAsync(factory_, ManagerEmail);
 		string token = client_.DefaultRequestHeaders.Authorization!.Parameter!;
 
 		await using HubConnection connection = BuildConnection(token);
-		TaskCompletionSource eventReceived = new();
-		connection.On("ShiftsChanged", () => eventReceived.TrySetResult());
+		TaskCompletionSource<ShiftChangedEvent> eventReceived = new();
+		connection.On<ShiftChangedEvent>("ShiftsChanged", payload => eventReceived.TrySetResult(payload));
 		await connection.StartAsync();
 
 		HttpResponseMessage response = await client_.DeleteAsync($"/Shift/{shiftId}");
@@ -138,5 +148,6 @@ public class TestAppHub
 
 		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
 		received.Should().BeTrue("la cancellazione di un turno deve far arrivare l'evento ShiftsChanged");
+		eventReceived.Task.Result.Date.Should().Be(shiftDate);
 	}
 }

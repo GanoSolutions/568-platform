@@ -18,10 +18,10 @@ namespace Five68.Services
 			_logger = logger;
 		}
 
-		public async Task NotifyShiftChangedAsync()
+		public async Task NotifyShiftChangedAsync(DateOnly date)
 		{
-			_logger.LogInformation("Broadcasting ShiftsChanged event");
-			await _hub.Clients.All.ShiftsChanged();
+			_logger.LogInformation("Broadcasting ShiftsChanged event for {Date}", date);
+			await _hub.Clients.All.ShiftsChanged(new ShiftChangedEvent(date));
 		}
 
 		public async Task NotifySwapRequestChangedAsync()

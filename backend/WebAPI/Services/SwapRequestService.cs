@@ -115,7 +115,7 @@ namespace Five68.Services
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
 			await _swapNotificationService.NotifySwapRequestChangedAsync();
-			await _shiftNotificationService.NotifyShiftChangedAsync();
+			await _shiftNotificationService.NotifyShiftChangedAsync(updated.Shift.Date);
 			_logger.LogInformation($"User {requesterId} accepted swap request {swapRequestId}");
 
 			return SwapRequestDTO.FromSwapRequest(updated);
