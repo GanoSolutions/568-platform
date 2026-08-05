@@ -7,7 +7,9 @@ namespace Five68.Services
 {
 	public class SwapRequestService
 	{
-		private ISwapRequestNotificationService _notificationService;
+		private ISwapRequestNotificationService _swapNotificationService;
+		private IShiftNotificationService _shiftNotificationService;
+
 		private readonly SwapRequestFacade _swapRequestFacade;
 		private readonly ShiftFacade _shiftFacade;
 		private readonly EmployeeFacade _employeeFacade;
@@ -22,13 +24,15 @@ namespace Five68.Services
 
 		public SwapRequestService(
 			ISwapRequestNotificationService notificationService,
+			IShiftNotificationService shiftNotificationService,
 			SwapRequestFacade swapRequestFacade,
 			ShiftFacade shiftFacade,
 			EmployeeFacade employeeFacade,
 			UserFacade userFacade,
 			ILogger<SwapRequestService> logger)
 		{
-			_notificationService = notificationService;
+			_swapNotificationService = notificationService;
+			_shiftNotificationService = shiftNotificationService;
 			_swapRequestFacade = swapRequestFacade;
 			_shiftFacade = shiftFacade;
 			_employeeFacade = employeeFacade;
@@ -86,7 +90,7 @@ namespace Five68.Services
 			// notify only after db save
 			foreach (SwapRequest r in toCreate)
 			{
-				await _notificationService.NotifySwapRequestChangedAsync();
+				await _swapNotificationService.NotifySwapRequestChangedAsync();
 				_logger.LogInformation($"User {requesterId} requested a shift swap on {shift.Date} for {r.TargetEmployeeId}");
 			}
 
@@ -110,7 +114,8 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-			await _notificationService.NotifySwapRequestChangedAsync();
+			await _swapNotificationService.NotifySwapRequestChangedAsync();
+			await _shiftNotificationService.NotifyShiftChangedAsync();
 			_logger.LogInformation($"User {requesterId} accepted swap request {swapRequestId}");
 
 			return SwapRequestDTO.FromSwapRequest(updated);
@@ -126,7 +131,7 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-			await _notificationService.NotifySwapRequestChangedAsync();
+			await _swapNotificationService.NotifySwapRequestChangedAsync();
 			_logger.LogInformation($"User {requesterId} rejected swap request {swapRequestId}");
 
 			return SwapRequestDTO.FromSwapRequest(updated);
@@ -142,7 +147,7 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-			await _notificationService.NotifySwapRequestChangedAsync();
+			await _swapNotificationService.NotifySwapRequestChangedAsync();
 			_logger.LogInformation($"User {requesterId} cancelled swap request {swapRequestId}");
 
 			return SwapRequestDTO.FromSwapRequest(updated);
