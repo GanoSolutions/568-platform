@@ -153,10 +153,16 @@ namespace Five68.Services
 			return SwapRequestDTO.FromSwapRequest(updated);
 		}
 
-		public async Task<IEnumerable<SwapRequestDTO>> GetForUser(Guid userId, UserRole role)
+		public async Task<IEnumerable<SwapRequestDTO>> GetForPendingUser(Guid userId, UserRole role)
 		{
 			bool seeAll = role is UserRole.Admin or UserRole.Manager;
-			return (await _swapRequestFacade.GetForUserAsync(userId, seeAll)).Select(SwapRequestDTO.FromSwapRequest);
+			return (await _swapRequestFacade.GetForPendingUserAsync(userId, seeAll)).Select(SwapRequestDTO.FromSwapRequest);
+		}
+
+		public async Task<IEnumerable<SwapRequestDTO>> GetHistoryForUser(Guid userId, UserRole role, int page, int pageSize)
+		{
+			bool seeAll = role is UserRole.Admin or UserRole.Manager;
+			return (await _swapRequestFacade.GetHistoryForUserAsync(userId, seeAll, page, pageSize)).Select(SwapRequestDTO.FromSwapRequest);
 		}
 
 		private async Task<SwapRequest> RequireCanAct(Guid swapRequestId, Guid requesterId, SwapRequestAction action)
