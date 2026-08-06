@@ -78,15 +78,35 @@ export function useCalendar() {
 		const d = new Date(prev); d.setDate(d.getDate() + 7); return d;
 	});
 
+	const fetchShifts = useCallback(
+		() => shiftApi.getByDateRange(weekRange.start, weekRange.end),
+		[weekRange.start, weekRange.end],
+	);
+
+	const fetchClosedDays = useCallback(
+		() => settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end),
+		[weekRange.start, weekRange.end],
+	);
+
+	const reloadShifts = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		if (!silent) setLoading(true);
+		setError('');
+
+		try {
+			setShifts(groupShiftsByDate(await fetchShifts()));
+		} catch (loadError) {
+			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
+		} finally {
+			if (!silent) setLoading(false);
+		}
+	}, [fetchShifts]);
+
 	const reloadCalendar = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
 		if (!silent) setLoading(true);
 		setError('');
 
 		try {
-			const [dtos, closedDayDtos] = await Promise.all([
-				shiftApi.getByDateRange(weekRange.start, weekRange.end),
-				settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end),
-			]);
+			const [dtos, closedDayDtos] = await Promise.all([fetchShifts(), fetchClosedDays()]);
 			setShifts(groupShiftsByDate(dtos));
 			setClosedDays(new Set(closedDayDtos.map(d => d.date)));
 		} catch (loadError) {
@@ -94,7 +114,7 @@ export function useCalendar() {
 		} finally {
 			if (!silent) setLoading(false);
 		}
-	}, [weekRange.start, weekRange.end]);
+	}, [fetchShifts, fetchClosedDays]);
 
 	useEffect(() => {
 		reloadCalendar();
@@ -102,15 +122,21 @@ export function useCalendar() {
 
 	// Canale live: la connessione è di proprietà di RequestsContext (avvio/stop),
 	// qui ci si limita a sottoscrivere/annullare la sottoscrizione all'evento.
+	// ShiftsChanged porta la data del turno modificato: rifacciamo il fetch degli
+	// shift solo se ricade nella settimana visualizzata (altrimenti nulla è cambiato
+	// nel range che stiamo mostrando). I closed days non sono toccati da questo
+	// evento, quindi non li rifetchiamo qui: restano quelli caricati con la settimana.
 	useEffect(() => {
 		const connection = getAppHubConnection();
-		connection.on('ShiftsChanged', () => {
-			reloadCalendar({ silent: true });
+		connection.on('ShiftsChanged', (payload: { date: string }) => {
+			if (payload.date >= weekRange.start && payload.date <= weekRange.end) {
+				reloadShifts({ silent: true });
+			}
 		});
 		return () => {
 			connection.off('ShiftsChanged');
 		};
-	}, [reloadCalendar]);
+	}, [reloadShifts, weekRange.start, weekRange.end]);
 
 	const getShiftForDay = (date: Date): ShiftData | null => {
 		const key = formatDateKey(date);

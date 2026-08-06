@@ -400,7 +400,7 @@ export interface SwapRequestCreatePayload {
 }
 
 export const swapRequestApi = {
-	getForUser: () => api.get<SwapRequestDTO[]>('/swaprequest'),
+	getPending: () => api.get<SwapRequestDTO[]>('/swaprequest/pending'),
 
 	create: (payload: SwapRequestCreatePayload) => api.post<SwapRequestDTO[]>('/swaprequest', payload),
 

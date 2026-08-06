@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { swapRequestApi, SwapRequestStatus, type SwapRequestDTO, type SwapRequestStatusDTO } from '@/lib/apiClient';
 import { getAppHubConnection, signalR } from '@/lib/realtime';
@@ -54,7 +54,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 		setError('');
 
 		try {
-			const dtos = await swapRequestApi.getForUser();
+			const dtos = await swapRequestApi.getPending();
 			const sorted = dtos.map(fromDTO).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 			setRequests(sorted);
 		} catch (loadError) {
@@ -69,33 +69,61 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 		reloadRequests();
 	}, [authLoading, user, reloadRequests]);
 
-	// Canale live: la connessione è condivisa con useCalendar (per ShiftsChanged),
-	// ma è questo provider — montato una volta sola a livello top-level e legato
-	// al ciclo di vita dell'autenticazione — a possederla (avvio qui, stop al logout
-	// gestito internamente da getAppHubConnection).
+	// reloadRequests cambia riferimento ad ogni cambio di `user` (es. refreshProfile()):
+	// tenerlo in un ref lascia gli handler sotto stabili senza doverli ri-registrare.
+	const reloadRequestsRef = useRef(reloadRequests);
 	useEffect(() => {
-		if (authLoading || !user) return;
+		reloadRequestsRef.current = reloadRequests;
+	}, [reloadRequests]);
 
+	// Canale live: la connessione è condivisa con useCalendar (per ShiftsChanged),
+	// ma è questo provider — montato una volta sola a livello top-level — a possederla
+	// (avvio/stop). Gli handler vengono registrati una sola volta per tutta la vita
+	// del provider: SignalR non espone un modo per rimuovere i singoli handler di
+	// onreconnected, quindi se questo effect rirunasse ad ogni cambio di `user` (come
+	// succedeva prima) si accumulerebbero handler duplicati ad ogni riconnessione.
+	useEffect(() => {
 		const connection = getAppHubConnection();
 		connection.on('SwapRequestsChanged', () => {
-			reloadRequests({ silent: true });
+			reloadRequestsRef.current({ silent: true });
 		});
 		connection.onreconnected(() => {
-			reloadRequests({ silent: true });
+			reloadRequestsRef.current({ silent: true });
 		});
-
-		if (connection.state === signalR.HubConnectionState.Disconnected) {
-			connection.start().catch(() => {
-				// Connessione iniziale fallita: il reloadRequests() al mount ha già
-				// popolato la lista, quindi non resta vuota. withAutomaticReconnect
-				// copre solo le cadute dopo una connessione riuscita.
-			});
-		}
 
 		return () => {
 			connection.off('SwapRequestsChanged');
 		};
-	}, [authLoading, user, reloadRequests]);
+	}, []);
+
+	// Avvio della connessione quando l'utente è autenticato. withAutomaticReconnect
+	// copre solo le cadute dopo una connessione riuscita, non un .start() iniziale
+	// fallito: qui si ritenta con backoff esponenziale finché non si connette (o finché
+	// il provider non viene smontato/l'utente non fa logout).
+	useEffect(() => {
+		if (authLoading || !user) return;
+
+		const connection = getAppHubConnection();
+		let cancelled = false;
+		let attempt = 0;
+		let retryTimer: ReturnType<typeof setTimeout>;
+
+		const tryConnect = () => {
+			if (cancelled || connection.state !== signalR.HubConnectionState.Disconnected) return;
+			connection.start().catch(() => {
+				if (cancelled) return;
+				attempt += 1;
+				const delay = Math.min(1000 * 2 ** attempt, 30000);
+				retryTimer = setTimeout(tryConnect, delay);
+			});
+		};
+		tryConnect();
+
+		return () => {
+			cancelled = true;
+			clearTimeout(retryTimer);
+		};
+	}, [authLoading, user]);
 
 	const createSwapRequest = async ({ shiftId, targetEmployeeIds }: { shiftId: string; targetEmployeeIds: string[] }) => {
 		setError('');
