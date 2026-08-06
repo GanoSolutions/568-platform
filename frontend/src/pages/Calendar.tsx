@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useCalendar, getWeekNumber } from '@/hooks/useCalendar';
 import { useEmployees } from '@/hooks/useEmployees';
+import { showErrorToast } from '@/lib/toast';
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import CopyWeekModal from '@/components/modals/CopyWeekModal';
 import ShiftModal from '@/components/modals/ShiftModal';
@@ -54,6 +55,18 @@ export default function Calendar() {
 	const weekNum = getWeekNumber(currentMonday);
 
 	const selectedShift = selectedDay ? getShiftForDay(selectedDay) : null;
+
+	// Errori di caricamento pagina (background/silenziosi, es. reload triggerato dal
+	// websocket): non sono azionabili dall'utente, quindi un toast che si auto-chiude
+	// è più corretto di un banner fisso. Gli errori delle azioni (actionError) restano
+	// invece nella rispettiva modale, dove l'utente deve vederli finché non corregge.
+	useEffect(() => {
+		if (calendarError) showErrorToast(calendarError);
+	}, [calendarError]);
+
+	useEffect(() => {
+		if (employeesError) showErrorToast(employeesError);
+	}, [employeesError]);
 
 	const handleSaveShift = async (entries: { employeeId: string; startTime: string; endTime: string }[]) => {
 		setActionError('');
@@ -135,14 +148,6 @@ export default function Calendar() {
 						</svg>
 						Copia settimana
 					</button>
-				</div>
-			)}
-
-			{/* Errori di caricamento pagina: gli errori delle azioni (actionError) sono già
-			    mostrati dentro la rispettiva modale, mostrarli anche qui li duplicherebbe. */}
-			{(calendarError || employeesError) && (
-				<div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{calendarError || employeesError}
 				</div>
 			)}
 
