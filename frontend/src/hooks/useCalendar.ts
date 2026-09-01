@@ -1,5 +1,5 @@
 // useCalendar.ts
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { settingsApi, shiftApi, type ShiftDTO } from '@/lib/apiClient';
 import { getAppHubConnection } from '@/lib/realtime';
 import { computeDuration, toBackendTime, toDisplayRange } from '@/lib/shiftTime';
@@ -55,12 +55,24 @@ function groupShiftsByDate(dtos: ShiftDTO[]): ShiftsMap {
 	}, {});
 }
 
+/**
+ * Ultima settimana visualizzata, ricordata a livello di modulo così sopravvive
+ * allo smontaggio di Calendar quando si naviga su un'altra pagina e si torna
+ * indietro (issue #53). Un refresh della pagina ricarica il modulo da zero e
+ * quindi la resetta volutamente: nessuna persistenza in sessionStorage/localStorage.
+ */
+let rememberedMonday: Date | null = null;
+
 export function useCalendar() {
-	const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()));
+	const [currentMonday, setCurrentMonday] = useState(() => rememberedMonday ?? getMondayOfWeek(new Date()));
 	const [shifts, setShifts] = useState<ShiftsMap>({});
 	const [closedDays, setClosedDays] = useState<Set<string>>(new Set());
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
+
+	useEffect(() => {
+		rememberedMonday = currentMonday;
+	}, [currentMonday]);
 
 	const weekDays = Array.from({ length: 7 }, (_, i) => {
 		const d = new Date(currentMonday);
@@ -78,6 +90,15 @@ export function useCalendar() {
 		const d = new Date(prev); d.setDate(d.getDate() + 7); return d;
 	});
 
+	const goToToday = () => setCurrentMonday(getMondayOfWeek(new Date()));
+	const isCurrentWeek = formatDateKey(currentMonday) === formatDateKey(getMondayOfWeek(new Date()));
+
+	// Contatore di richiesta: se si cambia settimana più volte prima che una
+	// fetch precedente sia tornata, questo scarta il risultato di quella
+	// obsoleta invece di lasciarla sovrascrivere lo stato con dati di una
+	// settimana che non è più quella visualizzata.
+	const requestIdRef = useRef(0);
+
 	const fetchShifts = useCallback(
 		() => shiftApi.getByDateRange(weekRange.start, weekRange.end),
 		[weekRange.start, weekRange.end],
@@ -89,30 +110,37 @@ export function useCalendar() {
 	);
 
 	const reloadShifts = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		const requestId = ++requestIdRef.current;
 		if (!silent) setLoading(true);
 		setError('');
 
 		try {
-			setShifts(groupShiftsByDate(await fetchShifts()));
+			const dtos = await fetchShifts();
+			if (requestId !== requestIdRef.current) return;
+			setShifts(groupShiftsByDate(await dtos));
 		} catch (loadError) {
+			if (requestId !== requestIdRef.current) return;
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
 		} finally {
-			if (!silent) setLoading(false);
+			if (requestId === requestIdRef.current && !silent) setLoading(false);
 		}
 	}, [fetchShifts]);
 
 	const reloadCalendar = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		const requestId = ++requestIdRef.current;
 		if (!silent) setLoading(true);
 		setError('');
 
 		try {
 			const [dtos, closedDayDtos] = await Promise.all([fetchShifts(), fetchClosedDays()]);
+			if (requestId !== requestIdRef.current) return;
 			setShifts(groupShiftsByDate(dtos));
 			setClosedDays(new Set(closedDayDtos.map(d => d.date)));
 		} catch (loadError) {
+			if (requestId !== requestIdRef.current) return;
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
 		} finally {
-			if (!silent) setLoading(false);
+			if (requestId === requestIdRef.current && !silent) setLoading(false);
 		}
 	}, [fetchShifts, fetchClosedDays]);
 
@@ -250,6 +278,8 @@ export function useCalendar() {
 		currentMonday,
 		goToPrevWeek,
 		goToNextWeek,
+		goToToday,
+		isCurrentWeek,
 		getShiftForDay,
 		saveShift,
 		copyWeek,
