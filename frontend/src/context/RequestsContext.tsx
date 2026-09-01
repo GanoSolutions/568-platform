@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { swapRequestApi, SwapRequestStatus, type SwapRequestDTO, type SwapRequestStatusDTO } from '@/lib/apiClient';
-import { getAppHubConnection, signalR } from '@/lib/realtime';
+import { getAppHubConnection, resetIntentionalStop, signalR, wasConnectionStoppedIntentionally } from '@/lib/realtime';
 import { showErrorToast, showSuccessToast } from '@/lib/toast';
 import type { SwapRequest } from '@/types';
 
@@ -88,10 +88,14 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 	// Segnala all'utente quando gli aggiornamenti live non sono disponibili (review
 	// Hermann su PR #49): un toast per "giù" e uno per "ripristinata", senza doppioni
 	// se lo stato non cambia — es. onreconnecting seguito da un onreconnected quasi
-	// immediato non deve mostrare "giù" se non l'abbiamo già mostrato.
+	// immediato non deve mostrare "giù" se non l'abbiamo già mostrato. Niente toast
+	// se l'utente ha appena fatto logout: wasConnectionStoppedIntentionally() (da
+	// realtime.ts) è impostato in modo sincrono al logout, prima ancora che
+	// connection.stop() chiuda davvero il socket — a differenza di un flag derivato
+	// da `user`, non rischia di arrivare in ritardo rispetto all'evento onclose.
 	const liveDownRef = useRef(false);
 	const markConnectionDown = useCallback(() => {
-		if (liveDownRef.current) return;
+		if (wasConnectionStoppedIntentionally() || liveDownRef.current) return;
 		liveDownRef.current = true;
 		showErrorToast('Aggiornamenti in tempo reale non disponibili, nuovo tentativo in corso...');
 	}, []);
@@ -146,7 +150,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 		});
 		connection.onclose(() => {
 			markConnectionDown();
-			tryConnectRef.current();
+			if (!wasConnectionStoppedIntentionally()) tryConnectRef.current();
 		});
 
 		return () => {
@@ -168,6 +172,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
 		const tryConnect = () => {
 			if (cancelled || connection.state !== signalR.HubConnectionState.Disconnected) return;
+			resetIntentionalStop();
 			connection.start().then(markConnectionRestored).catch(() => {
 				if (cancelled) return;
 				markConnectionDown();

@@ -5,6 +5,23 @@ const APP_HUB_PATH = '/hubs/app';
 
 let connection: signalR.HubConnection | null = null;
 
+// Impostato in modo sincrono al logout, PRIMA di chiamare connection.stop() — a
+// differenza di un flag derivato da stato React (es. `user`), questo è già vero
+// nell'istante esatto in cui la connessione si chiude, indipendentemente da quando
+// React arriva a ri-renderizzare. Serve a chi ascolta onclose/onreconnecting per
+// distinguere una chiusura voluta (logout) da una caduta di rete vera.
+let intentionalStop = false;
+
+export function wasConnectionStoppedIntentionally(): boolean {
+	return intentionalStop;
+}
+
+/** Da chiamare prima di ogni nuovo tentativo di connessione (login, retry): un
+ * eventuale futuro onclose deve tornare a essere trattato come inatteso. */
+export function resetIntentionalStop(): void {
+	intentionalStop = false;
+}
+
 /**
  * Connessione singleton condivisa da RequestsContext (che la possiede: avvio/stop)
  * e da altri consumer come useCalendar (che si limitano a on/off sugli eventi).
@@ -27,6 +44,7 @@ export function getAppHubConnection(): signalR.HubConnection {
 			.build();
 
 		window.addEventListener('app:logout', () => {
+			intentionalStop = true;
 			connection?.stop().catch(() => {});
 		});
 	}
