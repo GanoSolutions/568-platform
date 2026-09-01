@@ -77,6 +77,14 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 		reloadRequestsRef.current = reloadRequests;
 	}, [reloadRequests]);
 
+	// Stesso motivo: l'handler SwapRequestsChanged sotto è registrato una sola volta
+	// per tutta la vita del provider, quindi leggerebbe sempre lo `user` del primo
+	// render se non passasse da un ref.
+	const userRef = useRef(user);
+	useEffect(() => {
+		userRef.current = user;
+	}, [user]);
+
 	// Segnala all'utente quando gli aggiornamenti live non sono disponibili (review
 	// Hermann su PR #49): un toast per "giù" e uno per "ripristinata", senza doppioni
 	// se lo stato non cambia — es. onreconnecting seguito da un onreconnected quasi
@@ -107,8 +115,23 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 	// ogni riconnessione.
 	useEffect(() => {
 		const connection = getAppHubConnection();
-		connection.on('SwapRequestsChanged', () => {
+		connection.on('SwapRequestsChanged', (payload: { requesterId: string; status: SwapRequestStatusDTO; shiftDate: string }) => {
 			reloadRequestsRef.current({ silent: true });
+
+			// Esito per chi ha fatto la richiesta (review Hermann su PR #49): l'evento
+			// arriva a tutti, ma il toast ha senso solo per il richiedente, e solo per un
+			// esito vero e proprio — non per la creazione (pending) o per un annullamento
+			// fatto da lui stesso (già sa cosa ha fatto).
+			if (userRef.current && payload.requesterId === userRef.current.id) {
+				const [y, m, d] = payload.shiftDate.split('-');
+				const dateLabel = `${d}/${m}/${y}`;
+				const status = toFrontendStatus(payload.status);
+				if (status === 'accepted') {
+					showSuccessToast(`La tua richiesta di cambio turno del ${dateLabel} è stata accettata`);
+				} else if (status === 'rejected') {
+					showErrorToast(`La tua richiesta di cambio turno del ${dateLabel} è stata rifiutata`);
+				}
+			}
 		});
 		connection.onreconnected(() => {
 			reloadRequestsRef.current({ silent: true });

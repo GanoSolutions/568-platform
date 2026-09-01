@@ -24,10 +24,10 @@ namespace Five68.Services
 			await _hub.Clients.All.ShiftsChanged(new ShiftChangedEvent(date));
 		}
 
-		public async Task NotifySwapRequestChangedAsync()
+		public async Task NotifySwapRequestChangedAsync(SwapRequestChangedEvent payload)
 		{
-			_logger.LogInformation("Broadcasting SwapRequest ");
-			await _hub.Clients.All.SwapRequestsChanged();
+			_logger.LogInformation("Broadcasting SwapRequestsChanged event for requester {RequesterId}, status {Status}", payload.RequesterId, payload.Status);
+			await _hub.Clients.All.SwapRequestsChanged(payload);
 		}
 	}
 }
