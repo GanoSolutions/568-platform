@@ -2,6 +2,7 @@ using Five68.Exceptions;
 using Five68.Facades;
 using Five68.Models;
 using Five68.Models.DTO;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Five68.Services
 {
@@ -104,6 +105,39 @@ namespace Five68.Services
 
 			await _notificationService.NotifyShiftChangedAsync(shift.Date);
 			_logger.LogInformation($"User {requester.Email} deleted shift on {shift.Date} - {shift.StartTime}");
+		}
+
+		public async Task<ShiftCopyWeekResult> CopyWeek(ShiftCopyWeek model, Guid requesterId)
+		{
+			User requester = await RequireManagerOrAdmin(requesterId);
+
+			if (model.SourceWeekMonday.DayOfWeek != DayOfWeek.Monday)
+			{
+				throw new EntityException("La settimana sorgente deve iniziare di lunedì");
+			}
+
+			if (model.TargetStartDate.DayOfWeek != DayOfWeek.Monday)
+			{
+				throw new EntityException("La data di inizio del periodo deve essere un lunedì");
+			}
+
+			if (model.TargetEndDate.DayOfWeek != DayOfWeek.Sunday)
+			{
+				throw new EntityException("La data di fine del periodo deve essere una domenica");
+			}
+
+			if (model.TargetEndDate < model.TargetStartDate)
+			{
+				throw new EntityException("La data di fine deve essere successiva alla data di inizio");
+			}
+
+			ShiftCopyWeekResult result = await _shiftFacade.CopyWeekAsync(
+				model.SourceWeekMonday, model.TargetStartDate, model.TargetEndDate, requesterId) ??
+				throw new EntityException("La settimana selezionata non contiene turni da copiare");
+
+			_logger.LogInformation($"User {requester.Email} copied week of {model.SourceWeekMonday} onto {model.TargetStartDate}-{model.TargetEndDate}: {result.Created} created, {result.Overwritten} overwritten, {result.SkippedClosedDays} skipped");
+
+			return result;
 		}
 
 		private async Task<User> RequireManagerOrAdmin(Guid requesterId)
