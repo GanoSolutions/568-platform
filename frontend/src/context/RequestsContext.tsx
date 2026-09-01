@@ -125,40 +125,26 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 		};
 	}, [authLoading, user]);
 
+	// Le azioni sotto NON toccano `error`: quello è riservato ai fallimenti di
+	// reloadRequests (background/silenzioso, mostrato come toast). Gli errori
+	// di un'azione vengono solo rilanciati: il chiamante li mostra come banner
+	// nella propria pagina. Farlo qui duplicava banner+toast per lo stesso errore.
 	const createSwapRequest = async ({ shiftId, targetEmployeeIds }: { shiftId: string; targetEmployeeIds: string[] }) => {
-		setError('');
-		try {
-			await swapRequestApi.create({ shiftId, targetEmployeeIds });
-		} catch (createError) {
-			setError(createError instanceof Error ? createError.message : 'Richiesta cambio turno non riuscita');
-			throw createError;
-		}
+		await swapRequestApi.create({ shiftId, targetEmployeeIds });
 		await reloadRequests();
 	};
 
 	const respondToSwapRequest = async (requestId: string, decision: string) => {
-		setError('');
-		try {
-			if (decision === 'accepted') {
-				await swapRequestApi.accept(requestId);
-			} else {
-				await swapRequestApi.reject(requestId);
-			}
-		} catch (respondError) {
-			setError(respondError instanceof Error ? respondError.message : 'Aggiornamento richiesta non riuscito');
-			throw respondError;
+		if (decision === 'accepted') {
+			await swapRequestApi.accept(requestId);
+		} else {
+			await swapRequestApi.reject(requestId);
 		}
 		await reloadRequests();
 	};
 
 	const cancelSwapRequest = async (requestId: string) => {
-		setError('');
-		try {
-			await swapRequestApi.cancel(requestId);
-		} catch (cancelError) {
-			setError(cancelError instanceof Error ? cancelError.message : 'Annullamento richiesta non riuscito');
-			throw cancelError;
-		}
+		await swapRequestApi.cancel(requestId);
 		await reloadRequests();
 	};
 
