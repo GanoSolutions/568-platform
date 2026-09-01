@@ -6,6 +6,11 @@ const TYPE_STYLES: Record<string, string> = {
 	success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
 };
 
+const TITLE_STYLES: Record<string, string> = {
+	error: 'text-red-700',
+	success: 'text-emerald-700',
+};
+
 function ToastList() {
 	const { toasts } = Toast.useToastManager();
 
@@ -15,7 +20,7 @@ function ToastList() {
 			toast={toast}
 			className={`pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg transition-all duration-200 data-starting-style:translate-y-2 data-starting-style:opacity-0 data-ending-style:opacity-0 ${TYPE_STYLES[toast.type ?? 'error'] ?? TYPE_STYLES.error}`}
 		>
-			<Toast.Title className="flex-1" />
+			<Toast.Title className={`flex-1 ${TITLE_STYLES[toast.type ?? 'error'] ?? TITLE_STYLES.error}`} />
 			<Toast.Close aria-label="Chiudi" className="shrink-0 leading-none opacity-60 hover:opacity-100">
 				✕
 			</Toast.Close>
