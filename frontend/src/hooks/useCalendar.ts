@@ -63,6 +63,17 @@ function groupShiftsByDate(dtos: ShiftDTO[]): ShiftsMap {
  */
 let rememberedMonday: Date | null = null;
 
+/**
+ * Closed days per settimana (chiave "start_end"), condivisa a livello di modulo:
+ * cambiano di rado (li tocca solo un admin) e rimontare Calendar sulla stessa
+ * settimana (es. tornandoci da un'altra pagina) non deve rifare la stessa GET
+ * /settings/closed-days (segnalato da Hermann in review su PR #49). Gli shift
+ * invece cambiano spesso e restano sempre fetchati al mount, senza cache.
+ * ponytail: nessuna invalidazione perché oggi non c'è UI per modificare i
+ * closed days dal frontend — se arriva, va svuotata la voce toccata qui.
+ */
+const closedDaysCache = new Map<string, Set<string>>();
+
 export function useCalendar() {
 	const [currentMonday, setCurrentMonday] = useState(() => rememberedMonday ?? getMondayOfWeek(new Date()));
 	const [shifts, setShifts] = useState<ShiftsMap>({});
@@ -104,10 +115,16 @@ export function useCalendar() {
 		[weekRange.start, weekRange.end],
 	);
 
-	const fetchClosedDays = useCallback(
-		() => settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end),
-		[weekRange.start, weekRange.end],
-	);
+	const fetchClosedDays = useCallback(async () => {
+		const cacheKey = `${weekRange.start}_${weekRange.end}`;
+		const cached = closedDaysCache.get(cacheKey);
+		if (cached) return cached;
+
+		const dtos = await settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end);
+		const set = new Set(dtos.map(d => d.date));
+		closedDaysCache.set(cacheKey, set);
+		return set;
+	}, [weekRange.start, weekRange.end]);
 
 	const reloadShifts = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
 		const requestId = ++requestIdRef.current;
@@ -132,10 +149,10 @@ export function useCalendar() {
 		setError('');
 
 		try {
-			const [dtos, closedDayDtos] = await Promise.all([fetchShifts(), fetchClosedDays()]);
+			const [dtos, closedDaySet] = await Promise.all([fetchShifts(), fetchClosedDays()]);
 			if (requestId !== requestIdRef.current) return;
 			setShifts(groupShiftsByDate(dtos));
-			setClosedDays(new Set(closedDayDtos.map(d => d.date)));
+			setClosedDays(closedDaySet);
 		} catch (loadError) {
 			if (requestId !== requestIdRef.current) return;
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
