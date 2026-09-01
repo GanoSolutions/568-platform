@@ -81,8 +81,8 @@ public class TestAppHub
 		string token = client_.DefaultRequestHeaders.Authorization!.Parameter!;
 
 		await using HubConnection connection = BuildConnection(token);
-		TaskCompletionSource eventReceived = new();
-		connection.On("SwapRequestsChanged", () => eventReceived.TrySetResult());
+		TaskCompletionSource<SwapRequestChangedEvent> eventReceived = new();
+		connection.On<SwapRequestChangedEvent>("SwapRequestsChanged", payload => eventReceived.TrySetResult(payload));
 		await connection.StartAsync();
 
 		HttpResponseMessage response = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
@@ -94,6 +94,43 @@ public class TestAppHub
 
 		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
 		received.Should().BeTrue("la creazione di una swap request deve far arrivare l'evento SwapRequestsChanged");
+		eventReceived.Task.Result.RequesterId.Should().Be(requesterId);
+		eventReceived.Task.Result.Status.Should().Be(SwapRequestStatus.Pending);
+	}
+
+	[Fact]
+	public async Task AcceptingSwapRequest_BroadcastsSwapRequestsChangedWithAcceptedStatus()
+	{
+		Guid managerId = factory_.GetUserId(ManagerEmail);
+		Guid requesterId = factory_.CreateEmployee("hub-sr-acc-req@five68.com");
+		Guid targetId = factory_.CreateEmployee("hub-sr-acc-tgt@five68.com");
+		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 8, 4), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+
+		await client_.AuthorizeAsAsync(factory_, "hub-sr-acc-req@five68.com");
+		string requesterToken = client_.DefaultRequestHeaders.Authorization!.Parameter!;
+		HttpResponseMessage createResponse = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		{
+			ShiftId = shiftId,
+			TargetEmployeeIds = [targetId],
+		});
+		List<SwapRequestDTO> created = await createResponse.Content.ReadFromJsonAsync<List<SwapRequestDTO>>();
+		Guid swapRequestId = created![0].Id;
+
+		await using HubConnection connection = BuildConnection(requesterToken);
+		TaskCompletionSource<SwapRequestChangedEvent> eventReceived = new();
+		connection.On<SwapRequestChangedEvent>("SwapRequestsChanged", payload =>
+		{
+			if (payload.Status == SwapRequestStatus.Accepted) eventReceived.TrySetResult(payload);
+		});
+		await connection.StartAsync();
+
+		await client_.AuthorizeAsAsync(factory_, "hub-sr-acc-tgt@five68.com");
+		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{swapRequestId}/accept", null);
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
+		received.Should().BeTrue("l'accettazione di una swap request deve far arrivare l'evento SwapRequestsChanged con lo stato aggiornato");
+		eventReceived.Task.Result.RequesterId.Should().Be(requesterId);
 	}
 
 	// --- Broadcast: turni ---

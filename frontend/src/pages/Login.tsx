@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
+import { ApiError } from '@/lib/apiClient';
+import { showErrorToast } from '@/lib/toast';
 import type { AppUser } from '@/types';
 
 export default function Login() {
@@ -29,9 +31,16 @@ export default function Login() {
 			} else {
 				await loginWithPassword(email, password);
 			}
-		} catch {
-			// Messaggio generico: non riveliamo se l'errore è su email o password.
-			setError('Email o password non corretti');
+		} catch (loginError) {
+			// 401 = credenziali sbagliate, messaggio generico (non riveliamo se
+			// l'errore è su email o password). Qualsiasi altro errore (backend giù,
+			// rete, 5xx) non è colpa delle credenziali: non azionabile da qui, quindi
+			// toast invece del banner fisso — issue #63.
+			if (loginError instanceof ApiError && loginError.status === 401) {
+				setError('Email o password non corretti');
+			} else {
+				showErrorToast('Impossibile contattare il server. Riprova più tardi.');
+			}
 		} finally {
 			setSubmitting(false);
 		}

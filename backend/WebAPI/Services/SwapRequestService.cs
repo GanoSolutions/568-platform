@@ -1,5 +1,6 @@
 using Five68.Exceptions;
 using Five68.Facades;
+using Five68.Hubs;
 using Five68.Models;
 using Five68.Models.DTO;
 
@@ -90,7 +91,7 @@ namespace Five68.Services
 			// notify only after db save
 			foreach (SwapRequest r in toCreate)
 			{
-				await _swapNotificationService.NotifySwapRequestChangedAsync();
+				await _swapNotificationService.NotifySwapRequestChangedAsync(new SwapRequestChangedEvent(requesterId, SwapRequestStatus.Pending, shift.Date));
 				_logger.LogInformation($"User {requesterId} requested a shift swap on {shift.Date} for {r.TargetEmployeeId}");
 			}
 
@@ -114,7 +115,7 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-			await _swapNotificationService.NotifySwapRequestChangedAsync();
+			await _swapNotificationService.NotifySwapRequestChangedAsync(new SwapRequestChangedEvent(updated.RequesterId, updated.Status, updated.Shift.Date));
 			await _shiftNotificationService.NotifyShiftChangedAsync(updated.Shift.Date);
 			_logger.LogInformation($"User {requesterId} accepted swap request {swapRequestId}");
 
@@ -131,7 +132,7 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-			await _swapNotificationService.NotifySwapRequestChangedAsync();
+			await _swapNotificationService.NotifySwapRequestChangedAsync(new SwapRequestChangedEvent(updated.RequesterId, updated.Status, updated.Shift.Date));
 			_logger.LogInformation($"User {requesterId} rejected swap request {swapRequestId}");
 
 			return SwapRequestDTO.FromSwapRequest(updated);
@@ -147,7 +148,7 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
-			await _swapNotificationService.NotifySwapRequestChangedAsync();
+			await _swapNotificationService.NotifySwapRequestChangedAsync(new SwapRequestChangedEvent(updated.RequesterId, updated.Status, updated.Shift.Date));
 			_logger.LogInformation($"User {requesterId} cancelled swap request {swapRequestId}");
 
 			return SwapRequestDTO.FromSwapRequest(updated);

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useEmployees } from '@/hooks/useEmployees';
 import { usePushNotifications, isWebPushConfigured } from '@/hooks/usePushNotifications';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { showErrorToast } from '@/lib/toast';
 import type { SwapRequest } from '@/types';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -27,6 +28,12 @@ export default function Requests() {
 	const [busyId, setBusyId] = useState<string | null>(null);
 
 	const employeesById = useMemo(() => new Map(employees.map(emp => [emp.id, emp])), [employees]);
+
+	// Errore di caricamento/reload (anche silenzioso, via websocket): non azionabile,
+	// mostrato come toast che si auto-chiude invece di restare fisso in pagina.
+	useEffect(() => {
+		if (error) showErrorToast(error);
+	}, [error]);
 
 	// Telegram linking state
 	const [telegramToken, setTelegramToken] = useState<string | null>(null);
@@ -240,9 +247,9 @@ export default function Requests() {
 				</div>
 			</div>
 
-			{(error || actionError) && (
+			{actionError && (
 				<div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{actionError || error}
+					{actionError}
 				</div>
 			)}
 
