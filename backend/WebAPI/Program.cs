@@ -15,6 +15,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Reflection;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Primitives;
+using Five68.Hubs;
 
 
 namespace Five68
@@ -105,6 +107,7 @@ namespace Five68
 
 			app.UseMiddleware<ExceptionMiddleware>();
 			app.MapControllers();
+			app.MapHub<AppHub>("/hubs/app");
 			app.UseStaticFiles(new StaticFileOptions
 			{
 				RequestPath = "/static",
@@ -146,7 +149,23 @@ namespace Five68
 							Encoding.UTF8.GetBytes(jwtSettings.Secret)),
 						ClockSkew = TimeSpan.Zero,
 					};
+					options.Events = new JwtBearerEvents
+					{
+						OnMessageReceived = context =>
+						{
+							StringValues accessToken = context.Request.Query["access_token"];
+							if (!string.IsNullOrEmpty(accessToken) &&
+								context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+							{
+								context.Token = accessToken;
+							}
+
+							return Task.CompletedTask;
+						}
+					};
 				});
+
+			services.AddSignalR();
 
 			// Database
 			services.AddDbContext<Five68DbContext>((sp, options) =>
@@ -166,11 +185,13 @@ namespace Five68
 			services.AddScoped<AuthService>();
 			services.AddSingleton<JwtService>();
 			services.AddScoped<UserService>();
-			services.AddScoped<INotificationService, NoOpNotificationService>();
 			services.AddScoped<ShiftService>();
 			services.AddScoped<SettingsService>();
 			services.AddScoped<SwapRequestService>();
-
+			services.AddScoped<SignalRNotificationService>();
+			services.AddScoped<ISwapRequestNotificationService>(sp => sp.GetRequiredService<SignalRNotificationService>());
+			services.AddScoped<IShiftNotificationService>(sp => sp.GetRequiredService<SignalRNotificationService>());
+			services.AddScoped<IInviteService, NoOpInviteService>();
 			// Utils
 			services.AddSingleton<UserUtils>();
 

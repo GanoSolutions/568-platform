@@ -84,6 +84,7 @@ export interface ShiftDTO {
 	duration: string;
 	createdBy: string;
 	createdAt: string;
+	updatedAt: string;
 }
 
 export interface ShiftCreatePayload {
@@ -170,7 +171,7 @@ export function clearTokens(): void {
 // Base URL
 // ---------------------------------------------------------------------------
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080';
+export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080';
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -352,6 +353,8 @@ export const shiftApi = {
 	getByDateRange: (startDate: string, endDate: string) =>
 		api.get<ShiftDTO[]>(`/shift?startDate=${startDate}&endDate=${endDate}`),
 
+	getById: (id: string) => api.get<ShiftDTO>(`/shift/${id}`),
+
 	create: (payload: ShiftCreatePayload) => api.post<ShiftDTO>('/shift', payload),
 
 	update: (id: string, payload: ShiftUpdatePayload) => api.put<ShiftDTO>(`/shift/${id}`, payload),
@@ -368,4 +371,42 @@ export interface ClosedDayDTO {
 export const settingsApi = {
 	getClosedDaysByDateRange: (startDate: string, endDate: string) =>
 		api.get<ClosedDayDTO[]>(`/settings/closed-days?startDate=${startDate}&endDate=${endDate}`),
+};
+
+/** Mirror of the C# SwapRequestStatus enum — serialized as its numeric ordinal, not a string. */
+export type SwapRequestStatusDTO = 0 | 1 | 2 | 3;
+
+export const SwapRequestStatus = {
+	Pending: 0,
+	Accepted: 1,
+	Rejected: 2,
+	Cancelled: 3,
+} as const;
+
+/** Mirror of the C# SwapRequestDTO. Il turno è annidato (niente più N GET /shift lato client); requester/target employee restano bare id. */
+export interface SwapRequestDTO {
+	id: string;
+	shift: ShiftDTO;
+	requesterId: string;
+	targetEmployeeId: string;
+	status: SwapRequestStatusDTO;
+	createdAt: string;
+	respondedAt: string | null;
+}
+
+export interface SwapRequestCreatePayload {
+	shiftId: string;
+	targetEmployeeIds: string[];
+}
+
+export const swapRequestApi = {
+	getPending: () => api.get<SwapRequestDTO[]>('/swaprequest/pending'),
+
+	create: (payload: SwapRequestCreatePayload) => api.post<SwapRequestDTO[]>('/swaprequest', payload),
+
+	accept: (id: string) => api.post<SwapRequestDTO>(`/swaprequest/${id}/accept`),
+
+	reject: (id: string) => api.post<SwapRequestDTO>(`/swaprequest/${id}/reject`),
+
+	cancel: (id: string) => api.post<SwapRequestDTO>(`/swaprequest/${id}/cancel`),
 };

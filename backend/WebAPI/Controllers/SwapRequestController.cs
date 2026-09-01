@@ -3,6 +3,7 @@ using Five68.Models.DTO;
 using Five68.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
@@ -23,13 +24,13 @@ namespace Five68.Controllers
 		}
 
 		/// <summary>
-		/// Returns the swap requests visible to the caller: all of them for Admin/Manager,
+		/// Returns the pending swap requests visible to the caller: all of them for Admin/Manager,
 		/// only the ones where the caller is requester or target for Employee.
 		/// </summary>
-		/// <response code="200">List of swap requests.</response>
+		/// <response code="200">List of pending swap requests.</response>
 		/// <response code="401">Caller is not authenticated.</response>
-		[HttpGet("")]
-		public async Task<IActionResult> GetForUser()
+		[HttpGet("pending")]
+		public async Task<IActionResult> GetPending()
 		{
 			Guid requesterId = GetRequesterId();
 			if (requesterId == Guid.Empty)
@@ -43,7 +44,32 @@ namespace Five68.Controllers
 				return Unauthorized();
 			}
 
-			return Ok(await _swapRequestService.GetForUser(requesterId, user.Role));
+			return Ok(await _swapRequestService.GetForPendingUser(requesterId, user.Role));
+		}
+
+		/// <summary>
+		/// Returns the full paginated swap request history visible to the caller (any status),
+		/// ordered from most to least recent.
+		/// </summary>
+		/// <response code="200">Paginated list of swap requests.</response>
+		/// <response code="401">Caller is not authenticated.</response>
+		/// <response code="400">page or pageSize out of range.</response>
+		[HttpGet("history")]
+		public async Task<IActionResult> GetHistory([FromQuery] int page = 1, [FromQuery, Range(1, 50)] int pageSize = 20)
+		{
+			Guid requesterId = GetRequesterId();
+			if (requesterId == Guid.Empty)
+			{
+				return Unauthorized();
+			}
+
+			User user = await _userService.Get(requesterId);
+			if (user is null)
+			{
+				return Unauthorized();
+			}
+
+			return Ok(await _swapRequestService.GetHistoryForUser(requesterId, user.Role, page, pageSize));
 		}
 
 		/// <summary>

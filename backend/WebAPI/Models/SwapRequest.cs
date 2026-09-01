@@ -11,7 +11,5 @@ namespace Five68.Models
 		public DateTimeOffset? RespondedAt { get; set; }
 
 		public Shift Shift { get; set; } = null!;
-		public User Requester { get; set; } = null!;
-		public User TargetEmployee { get; set; } = null!;
 	}
 }

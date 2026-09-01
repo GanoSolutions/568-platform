@@ -63,8 +63,12 @@ namespace Five68.Initializer
 				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
 			);
 
-			// Settimana corrente (oggi = mercoledì 2026-07-01)
-			DateTime today = DateTime.UtcNow.Date;
+			// Settimana di riferimento fissa (mercoledì 2026-07-01), indipendente dal
+			// giorno reale in cui viene lanciato il seed: usare DateTime.UtcNow.Date
+			// come "mercoledì" faceva sì che, lanciando il seed in un altro giorno della
+			// settimana, i turni finissero per cadere di domenica/lunedì — proprio i
+			// giorni marcati come chiusura settimanale poco più sotto.
+			DateTime today = new DateTime(2026, 7, 1);
 			DateTime mon = today.AddDays(-2); // lun 29/06 — chiusura
 			DateTime tue = today.AddDays(-1); // mar 30/06 — 2 dipendenti (1 parziale)
 			DateTime wed = today;             // mer 01/07 — oggi, 3 dipendenti
@@ -227,14 +231,16 @@ namespace Five68.Initializer
 					ShiftId = annaTueShiftId,
 					RequesterId = annaId,
 					TargetEmployeeId = luigiId,
-					Status = SwapRequestStatus.Accepted
+					Status = SwapRequestStatus.Accepted,
+					RespondedAt = DateTimeOffset.UtcNow,
 				},
 				new SwapRequest { // marco aveva chiesto a luigi di coprire il suo ven (parziale) → rifiutato
 					Id = Guid.NewGuid(),
 					ShiftId = marcoFriShiftId,
 					RequesterId = marcoId,
 					TargetEmployeeId = luigiId,
-					Status = SwapRequestStatus.Rejected
+					Status = SwapRequestStatus.Rejected,
+					RespondedAt = DateTimeOffset.UtcNow,
 				},
 			]);
 

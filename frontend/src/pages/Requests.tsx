@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
+import { useEmployees } from '@/hooks/useEmployees';
 import { usePushNotifications, isWebPushConfigured } from '@/hooks/usePushNotifications';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { SwapRequest } from '@/types';
@@ -19,10 +20,13 @@ function formatDate(dateStr: string): string {
 
 export default function Requests() {
 	const { user, refreshProfile } = useAuth();
-	const { requests, loading, error, respondToSwapRequest } = useRequests();
+	const { requests, loading, error, respondToSwapRequest, cancelSwapRequest } = useRequests();
+	const { employees } = useEmployees();
 	const push = usePushNotifications();
 	const [actionError, setActionError] = useState('');
 	const [busyId, setBusyId] = useState<string | null>(null);
+
+	const employeesById = useMemo(() => new Map(employees.map(emp => [emp.id, emp])), [employees]);
 
 	// Telegram linking state
 	const [telegramToken, setTelegramToken] = useState<string | null>(null);
@@ -80,6 +84,18 @@ export default function Requests() {
 			await respondToSwapRequest(requestId, decision);
 		} catch (decisionError) {
 			setActionError((decisionError as Error).message || 'Aggiornamento richiesta non riuscito');
+		} finally {
+			setBusyId(null);
+		}
+	};
+
+	const handleCancel = async (requestId: string) => {
+		setActionError('');
+		setBusyId(requestId);
+		try {
+			await cancelSwapRequest(requestId);
+		} catch (cancelError) {
+			setActionError((cancelError as Error).message || 'Annullamento richiesta non riuscito');
 		} finally {
 			setBusyId(null);
 		}
@@ -224,6 +240,12 @@ export default function Requests() {
 				</div>
 			</div>
 
+			{(error || actionError) && (
+				<div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{actionError || error}
+				</div>
+			)}
+
 			{loading && (
 				<div className="flex flex-col items-center text-center py-16 px-8 bg-white">
 					<div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-4" />
@@ -246,15 +268,28 @@ export default function Requests() {
 				<div className="divide-y divide-slate-100">
 					{requests.map((request: SwapRequest) => {
 						const isIncoming = request.targetEmployeeId === user?.id;
-						const canRespond = request.status === 'pending' && (isIncoming || user?.role === 'admin');
+						const isOwn = request.requesterId === user?.id;
+						const canRespond = request.status === 'pending' && (isIncoming || user?.isAdmin === true);
+						const canCancel = request.status === 'pending' && isOwn;
+						const requester = employeesById.get(request.requesterId);
+						const requesterName = requester?.name ?? 'Sconosciuto';
+						const targetName = employeesById.get(request.targetEmployeeId)?.name ?? 'Sconosciuto';
+						const shiftChanged = Boolean(request.shiftUpdatedAt) && new Date(request.shiftUpdatedAt) > new Date(request.createdAt);
 
 						return (
-							<div key={request.id} className="bg-white px-4 py-4 space-y-3">
+							<div
+								key={request.id}
+								className="px-4 py-4 space-y-3 border-l-4"
+								style={requester
+									? { backgroundColor: `${requester.color}26`, borderLeftColor: requester.color }
+									: { backgroundColor: 'white', borderLeftColor: 'transparent' }
+								}
+							>
 								<div className="flex items-start justify-between gap-3">
 									<div>
-										<p className="font-semibold text-slate-800">{formatDate(request.workDate)}</p>
+										<p className="font-semibold text-slate-800">{request.workDate ? formatDate(request.workDate) : '—'}</p>
 										<p className="text-sm text-slate-500 mt-0.5">
-											{request.requester?.name} → {request.target?.name}
+											{requesterName} → {targetName}
 										</p>
 									</div>
 									<span className={`text-[10px] font-semibold border px-2 py-1 rounded-full uppercase tracking-wider ${STATUS_STYLES[request.status]}`}>
@@ -262,11 +297,17 @@ export default function Requests() {
 									</span>
 								</div>
 
+								{shiftChanged && (
+									<div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+										Attenzione: il turno è stato modificato dopo la creazione di questa richiesta.
+									</div>
+								)}
+
 								<div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600 space-y-1">
-						<p><span className="text-slate-500">Richiedente:</span> {request.requester?.name}</p>
-						<p><span className="text-slate-500">Collega:</span> {request.target?.name}</p>
-						<p><span className="text-slate-500">Creata il:</span> {new Date(request.createdAt).toLocaleString('it-IT')}</p>
-						{request.respondedAt && <p><span className="text-slate-500">Risposta il:</span> {new Date(request.respondedAt).toLocaleString('it-IT')}</p>}
+									<p><span className="text-slate-500">Richiedente:</span> {requesterName}</p>
+									<p><span className="text-slate-500">Collega:</span> {targetName}</p>
+									<p><span className="text-slate-500">Creata il:</span> {new Date(request.createdAt).toLocaleString('it-IT')}</p>
+									{request.respondedAt && <p><span className="text-slate-500">Risposta il:</span> {new Date(request.respondedAt).toLocaleString('it-IT')}</p>}
 								</div>
 
 								{canRespond && (
@@ -288,7 +329,17 @@ export default function Requests() {
 									</div>
 								)}
 
-								{!canRespond && request.status === 'pending' && (
+								{canCancel && (
+									<button
+										onClick={() => handleCancel(request.id)}
+										disabled={busyId === request.id}
+										className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-70"
+									>
+										{busyId === request.id ? <><span className="inline-block w-4 h-4 rounded-full border-2 border-slate-400 border-t-transparent animate-spin" /> Annullamento...</> : 'Annulla richiesta'}
+									</button>
+								)}
+
+								{!canRespond && !canCancel && request.status === 'pending' && (
 									<p className="text-xs text-slate-500 italic">
 										{isIncoming ? 'In attesa della tua risposta' : 'In attesa della risposta del collega'}
 									</p>

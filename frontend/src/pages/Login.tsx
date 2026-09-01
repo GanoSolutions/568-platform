@@ -20,9 +20,9 @@ export default function Login() {
 		try {
 			if (isMockMode) {
 				if (email === 'birreria568@gmail.com' && password === 'admin') {
-					login({ id: '1', name: 'Amministratore', email, role: 'admin', color: '#6366f1', firstLoginCompleted: true } as AppUser);
+					login({ id: '1', name: 'Amministratore', email, role: 'admin', isAdmin: true, color: '#6366f1', firstLoginCompleted: true } as AppUser);
 				} else if (email === 'test@test.com' && password === 'test') {
-					login({ id: '2', name: 'Mario Rossi', email, role: 'employee', color: '#f43f5e', firstLoginCompleted: true } as AppUser);
+					login({ id: '2', name: 'Mario Rossi', email, role: 'employee', isAdmin: false, color: '#f43f5e', firstLoginCompleted: true } as AppUser);
 				} else {
 					throw new Error('Email o password non corretti');
 				}

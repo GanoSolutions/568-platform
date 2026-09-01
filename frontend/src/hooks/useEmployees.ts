@@ -38,18 +38,34 @@ interface EmployeeFormData {
 	contractEnd: string;
 }
 
+/**
+ * Lista dipendenti condivisa a livello di modulo: Calendar, Requests ed
+ * Employees montano tutti useEmployees() e, cambiando pagina, lo smontano e
+ * rimontano — senza cache rifarebbero la stessa GET /user identica ad ogni
+ * navigazione (segnalato da Hermann in review su PR #49). Refresh pagina
+ * resetta il modulo e quindi la cache, volutamente: nessuna persistenza.
+ */
+let employeesCache: EmployeeDetail[] | null = null;
+
 export function useEmployees() {
-	const [employees, setEmployees] = useState<EmployeeDetail[]>([]);
-	const [loading, setLoading] = useState(true);
+	const [employees, setEmployees] = useState<EmployeeDetail[]>(employeesCache ?? []);
+	const [loading, setLoading] = useState(employeesCache === null);
 	const [error, setError] = useState('');
 
-	// 1. Pure async fetch function (NO synchronous setState at the start)
-	const fetchEmployees = useCallback(async () => {
+	// 1. Pure async fetch function (NO synchronous setState at the start).
+	// force=true (dopo una mutazione) salta la cache e la rimpiazza col dato fresco.
+	const fetchEmployees = useCallback(async (force = false) => {
+		if (!force && employeesCache) {
+			setEmployees(employeesCache);
+			setLoading(false);
+			return;
+		}
 		try {
 			const dtos = await userApi.getAll();
 			const mapped = [...dtos]
 				.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 				.map(mapUserDTOToEmployee);
+			employeesCache = mapped;
 			setEmployees(mapped);
 		} catch (loadError) {
 			setError(loadError instanceof Error ? loadError.message : 'Errore nel caricamento dei dipendenti');
@@ -67,7 +83,7 @@ export function useEmployees() {
 	const reloadEmployees = useCallback(async () => {
 		setLoading(true);
 		setError('');
-		await fetchEmployees();
+		await fetchEmployees(true);
 	}, [fetchEmployees]);
 
 	const addEmployee = async (data: EmployeeFormData) => {

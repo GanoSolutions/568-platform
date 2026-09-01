@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { swapRequestApi, SwapRequestStatus, type SwapRequestDTO, type SwapRequestStatusDTO } from '@/lib/apiClient';
+import { getAppHubConnection, signalR } from '@/lib/realtime';
 import type { SwapRequest } from '@/types';
 
 interface RequestsContextValue {
@@ -12,82 +13,32 @@ interface RequestsContextValue {
 	reloadRequests: () => Promise<void>
 	createSwapRequest: (params: { shiftId: string; targetEmployeeIds: string[] }) => Promise<void>
 	respondToSwapRequest: (requestId: string, decision: string) => Promise<void>
+	cancelSwapRequest: (requestId: string) => Promise<void>
 }
 
 const RequestsContext = createContext<RequestsContextValue | null>(null);
-const REQUESTS_TIMEOUT_MS = 10000;
 
-function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, errorMessage: string): Promise<T> {
-	return Promise.race([
-		Promise.resolve(promise),
-		new Promise<never>((_, reject) => {
-			window.setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
-		}),
-	]);
+function toFrontendStatus(status: SwapRequestStatusDTO): SwapRequest['status'] {
+	switch (status) {
+	case SwapRequestStatus.Pending: return 'pending';
+	case SwapRequestStatus.Accepted: return 'accepted';
+	case SwapRequestStatus.Rejected: return 'rejected';
+	case SwapRequestStatus.Cancelled: return 'cancelled';
+	}
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizeRequest(row: any): SwapRequest {
+function fromDTO(dto: SwapRequestDTO): SwapRequest {
 	return {
-		id: row.id,
-		shiftId: row.shift_id,
-		requesterId: row.requester_id,
-		targetEmployeeId: row.target_employee_id,
-		status: row.status,
-		createdAt: row.created_at,
-		respondedAt: row.responded_at,
-		workDate: row.shifts?.work_date,
-		requester: row.requester
-			? {
-				id: row.requester.id,
-				name: row.requester.full_name,
-				color: row.requester.color,
-			}
-			: null,
-		target: row.target
-			? {
-				id: row.target.id,
-				name: row.target.full_name,
-				color: row.target.color,
-			}
-			: null,
+		id: dto.id,
+		shiftId: dto.shift.id,
+		requesterId: dto.requesterId,
+		targetEmployeeId: dto.targetEmployeeId,
+		status: toFrontendStatus(dto.status),
+		createdAt: dto.createdAt,
+		respondedAt: dto.respondedAt,
+		workDate: dto.shift.date,
+		shiftUpdatedAt: dto.shift.updatedAt,
 	};
-}
-
-async function sendPushNotification({ profileIds, title, body, url }: { profileIds: string[]; title: string; body: string; url: string }) {
-	if (!isSupabaseConfigured || !supabase || !Array.isArray(profileIds) || profileIds.length === 0) {
-		return;
-	}
-
-	try {
-		const { data, error } = await supabase.functions.invoke('send-push', {
-			body: { profileIds, title, body, url },
-		});
-
-		if (error) {
-			console.warn('send-push invoke error', error);
-			return;
-		}
-
-		if (data?.failedCount) {
-			console.warn('send-push partial failure', data);
-		}
-	} catch {
-		// Non blocchiamo il flusso applicativo se la notifica esterna fallisce.
-	}
-}
-
-async function sendEmailNotification({ type, requesterId, targetId, workDate }: { type: string; requesterId: string; targetId: string; workDate: string }) {
-	if (!isSupabaseConfigured || !supabase) return;
-
-	try {
-		const { error } = await supabase.functions.invoke('send-email', {
-			body: { type, requesterId, targetId, workDate },
-		});
-		if (error) console.warn('send-email invoke error', error);
-	} catch {
-		// Non blocchiamo il flusso se l'email fallisce.
-	}
 }
 
 export function RequestsProvider({ children }: { children: ReactNode }) {
@@ -96,222 +47,118 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
 
-	useEffect(() => {
-		if (authLoading) return;
+	const reloadRequests = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		if (!user) return;
 
-		if (!user || !isSupabaseConfigured || !supabase) {
-			return;
+		if (!silent) setLoading(true);
+		setError('');
+
+		try {
+			const dtos = await swapRequestApi.getPending();
+			const sorted = dtos.map(fromDTO).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+			setRequests(sorted);
+		} catch (loadError) {
+			setError(loadError instanceof Error ? loadError.message : 'Caricamento richieste non riuscito');
+		} finally {
+			if (!silent) setLoading(false);
 		}
+	}, [user]);
 
-		const sb = supabase;
-		let mounted = true;
+	useEffect(() => {
+		if (authLoading || !user) return;
+		reloadRequests();
+	}, [authLoading, user, reloadRequests]);
 
-		const loadRequests = async ({ silent = false } = {}) => {
-			await Promise.resolve();
+	// reloadRequests cambia riferimento ad ogni cambio di `user` (es. refreshProfile()):
+	// tenerlo in un ref lascia gli handler sotto stabili senza doverli ri-registrare.
+	const reloadRequestsRef = useRef(reloadRequests);
+	useEffect(() => {
+		reloadRequestsRef.current = reloadRequests;
+	}, [reloadRequests]);
 
-			if (!silent) {
-				setLoading(true);
-			}
-			setError('');
-
-			let query = sb
-				.from('swap_requests')
-				.select(`
-          id,
-          shift_id,
-          requester_id,
-          target_employee_id,
-          status,
-          created_at,
-          responded_at,
-          shifts!inner(work_date),
-          requester:profiles!swap_requests_requester_id_fkey(id, full_name, color),
-          target:profiles!swap_requests_target_employee_id_fkey(id, full_name, color)
-        `)
-				.order('created_at', { ascending: false });
-
-			if (user.role !== 'admin') {
-				query = query.or(`requester_id.eq.${user.id},target_employee_id.eq.${user.id}`);
-			}
-
-			let data: unknown[] | null;
-			let loadError: { message: string } | null;
-
-			try {
-				const result = await withTimeout(query, REQUESTS_TIMEOUT_MS, 'Timeout caricamento richieste');
-				data = result.data;
-				loadError = result.error;
-			} catch (timeoutError) {
-				setError((timeoutError as Error).message);
-				if (!silent) {
-					setLoading(false);
-				}
-				return;
-			}
-
-			if (!mounted) return;
-
-			if (loadError) {
-				setError(loadError.message);
-				if (!silent) {
-					setLoading(false);
-				}
-				return;
-			}
-
-			setRequests((data ?? []).map(normalizeRequest));
-			if (!silent) {
-				setLoading(false);
-			}
-		};
-
-		loadRequests();
-
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				loadRequests({ silent: true });
-			}
-		};
-
-		window.addEventListener('focus', handleVisibilityChange);
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
-		const channel = sb
-			.channel(`swap-requests-${user.id}-${user.role}`)
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests' }, () => {
-				loadRequests({ silent: true });
-			})
-			.subscribe();
+	// Canale live: la connessione è condivisa con useCalendar (per ShiftsChanged),
+	// ma è questo provider — montato una volta sola a livello top-level — a possederla
+	// (avvio/stop). Gli handler vengono registrati una sola volta per tutta la vita
+	// del provider: SignalR non espone un modo per rimuovere i singoli handler di
+	// onreconnected, quindi se questo effect rirunasse ad ogni cambio di `user` (come
+	// succedeva prima) si accumulerebbero handler duplicati ad ogni riconnessione.
+	useEffect(() => {
+		const connection = getAppHubConnection();
+		connection.on('SwapRequestsChanged', () => {
+			reloadRequestsRef.current({ silent: true });
+		});
+		connection.onreconnected(() => {
+			reloadRequestsRef.current({ silent: true });
+		});
 
 		return () => {
-			mounted = false;
-			window.removeEventListener('focus', handleVisibilityChange);
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-			sb.removeChannel(channel);
+			connection.off('SwapRequestsChanged');
+		};
+	}, []);
+
+	// Avvio della connessione quando l'utente è autenticato. withAutomaticReconnect
+	// copre solo le cadute dopo una connessione riuscita, non un .start() iniziale
+	// fallito: qui si ritenta con backoff esponenziale finché non si connette (o finché
+	// il provider non viene smontato/l'utente non fa logout).
+	useEffect(() => {
+		if (authLoading || !user) return;
+
+		const connection = getAppHubConnection();
+		let cancelled = false;
+		let attempt = 0;
+		let retryTimer: ReturnType<typeof setTimeout>;
+
+		const tryConnect = () => {
+			if (cancelled || connection.state !== signalR.HubConnectionState.Disconnected) return;
+			connection.start().catch(() => {
+				if (cancelled) return;
+				attempt += 1;
+				const delay = Math.min(1000 * 2 ** attempt, 30000);
+				retryTimer = setTimeout(tryConnect, delay);
+			});
+		};
+		tryConnect();
+
+		return () => {
+			cancelled = true;
+			clearTimeout(retryTimer);
 		};
 	}, [authLoading, user]);
 
-	const reloadRequests = async () => {
-		if (!user || !isSupabaseConfigured || !supabase) return;
-
-		setLoading(true);
-		setError('');
-
-		let query = supabase
-			.from('swap_requests')
-			.select(`
-        id,
-        shift_id,
-        requester_id,
-        target_employee_id,
-        status,
-        created_at,
-        responded_at,
-        shifts!inner(work_date),
-        requester:profiles!swap_requests_requester_id_fkey(id, full_name, color),
-        target:profiles!swap_requests_target_employee_id_fkey(id, full_name, color)
-      `)
-			.order('created_at', { ascending: false });
-
-		if (user.role !== 'admin') {
-			query = query.or(`requester_id.eq.${user.id},target_employee_id.eq.${user.id}`);
-		}
-
-		const { data, error: loadError } = await withTimeout(
-			query,
-			REQUESTS_TIMEOUT_MS,
-			'Timeout caricamento richieste',
-		);
-
-		if (loadError) {
-			setError(loadError.message);
-			setLoading(false);
-			throw loadError;
-		}
-
-		setRequests(((data as unknown[]) ?? []).map(normalizeRequest));
-		setLoading(false);
-	};
-
 	const createSwapRequest = async ({ shiftId, targetEmployeeIds }: { shiftId: string; targetEmployeeIds: string[] }) => {
-		if (!user || !isSupabaseConfigured || !supabase) return;
-
 		setError('');
-
-		for (const targetEmployeeId of targetEmployeeIds) {
-			const { error: rpcError } = await supabase.rpc('create_swap_request', {
-				p_shift_id: shiftId,
-				p_requester_id: user.id,
-				p_target_employee_id: targetEmployeeId,
-			});
-
-			if (rpcError) {
-				setError(rpcError.message);
-				throw rpcError;
-			}
+		try {
+			await swapRequestApi.create({ shiftId, targetEmployeeIds });
+		} catch (createError) {
+			setError(createError instanceof Error ? createError.message : 'Richiesta cambio turno non riuscita');
+			throw createError;
 		}
-
-		const { data: shiftRow } = await supabase
-			.from('shifts')
-			.select('work_date')
-			.eq('id', shiftId)
-			.maybeSingle();
-
-		const workDate = shiftRow?.work_date ?? '';
-
-		await Promise.all([
-			sendPushNotification({
-				profileIds: targetEmployeeIds,
-				title: 'Nuova richiesta cambio turno',
-				body: `${user.name} ti ha inviato una richiesta di cambio turno`,
-				url: '/requests',
-			}),
-			...targetEmployeeIds.map(targetId =>
-				sendEmailNotification({
-					type: 'swap_new',
-					requesterId: user.id,
-					targetId,
-					workDate,
-				})
-			),
-		]);
-
 		await reloadRequests();
 	};
 
 	const respondToSwapRequest = async (requestId: string, decision: string) => {
-		if (!user || !isSupabaseConfigured || !supabase) return;
-
 		setError('');
-		const request = requests.find((item) => item.id === requestId);
-		const { error: rpcError } = await supabase.rpc('respond_to_swap_request', {
-			p_swap_request_id: requestId,
-			p_decision: decision,
-		});
-
-		if (rpcError) {
-			setError(rpcError.message);
-			throw rpcError;
+		try {
+			if (decision === 'accepted') {
+				await swapRequestApi.accept(requestId);
+			} else {
+				await swapRequestApi.reject(requestId);
+			}
+		} catch (respondError) {
+			setError(respondError instanceof Error ? respondError.message : 'Aggiornamento richiesta non riuscito');
+			throw respondError;
 		}
+		await reloadRequests();
+	};
 
-		if (request?.requesterId) {
-			const emailType = decision === 'accepted' ? 'swap_accepted' : 'swap_rejected';
-			await Promise.all([
-				sendPushNotification({
-					profileIds: [request.requesterId],
-					title: decision === 'accepted' ? 'Richiesta accettata' : 'Richiesta rifiutata',
-					body: `${user.name} ha ${decision === 'accepted' ? 'accettato' : 'rifiutato'} la tua richiesta di cambio turno`,
-					url: '/requests',
-				}),
-				sendEmailNotification({
-					type: emailType,
-					requesterId: request.requesterId,
-					targetId: user.id,
-					workDate: request.workDate ?? '',
-				}),
-			]);
+	const cancelSwapRequest = async (requestId: string) => {
+		setError('');
+		try {
+			await swapRequestApi.cancel(requestId);
+		} catch (cancelError) {
+			setError(cancelError instanceof Error ? cancelError.message : 'Annullamento richiesta non riuscito');
+			throw cancelError;
 		}
-
 		await reloadRequests();
 	};
 
@@ -343,6 +190,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 				reloadRequests,
 				createSwapRequest,
 				respondToSwapRequest,
+				cancelSwapRequest,
 			}}
 		>
 			{children}

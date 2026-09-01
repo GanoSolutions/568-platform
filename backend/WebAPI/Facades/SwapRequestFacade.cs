@@ -1,4 +1,5 @@
 using Five68.Models;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -37,7 +38,7 @@ namespace Five68.Facades
 			// AsNoTracking: gli update in questa Facade passano sempre da ExecuteUpdateAsync
 			// (bypassa il change tracker), quindi una lettura tracciata rischierebbe di restituire
 			// uno stato stantio se la stessa entità era già stata caricata prima nello stesso scope.
-			return await _context.SwapRequests.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+			return await _context.SwapRequests.AsNoTracking().Include(x => x.Shift).FirstOrDefaultAsync(x => x.Id == id);
 		}
 
 		internal async Task<SwapRequest> FindPendingByShiftAndTargetAsync(Guid shiftId, Guid targetEmployeeId)
@@ -47,15 +48,21 @@ namespace Five68.Facades
 				&& x.Status == SwapRequestStatus.Pending);
 		}
 
-		internal async Task<IEnumerable<SwapRequest>> GetForUserAsync(Guid userId, bool seeAll)
+		internal async Task<IEnumerable<SwapRequest>> GetForPendingUserAsync(Guid userId, bool seeAll)
 		{
-			IQueryable<SwapRequest> query = _context.SwapRequests.AsNoTracking().OrderByDescending(x => x.CreatedAt);
+			return await BaseQueryForUser(userId, seeAll)
+				.Where(x => x.Status == SwapRequestStatus.Pending)
+				.OrderByDescending(x => x.CreatedAt)
+				.ToListAsync();
+		}
 
-			if (!seeAll)
-			{
-				query = query.Where(x => x.RequesterId == userId || x.TargetEmployeeId == userId);
-			}
-			return await query.ToListAsync();
+		internal async Task<IEnumerable<SwapRequest>> GetHistoryForUserAsync(Guid userId, bool seeAll, int page, int pageSize)
+		{
+			return await BaseQueryForUser(userId, seeAll)
+				.OrderByDescending(x => x.CreatedAt)
+				.Skip((page - 1) * pageSize)
+				.Take(pageSize)
+				.ToListAsync();
 		}
 
 		internal async Task<AcceptResult> TryAcceptAsync(Guid swapRequestId, Guid shiftId, Guid targetEmployeeId)
@@ -106,6 +113,18 @@ namespace Five68.Facades
 			await _context.SwapRequests
 				.Where(x => x.ShiftId == shiftId && x.Status == SwapRequestStatus.Pending)
 				.ExecuteDeleteAsync();
+		}
+
+		private IQueryable<SwapRequest> BaseQueryForUser(Guid userId, bool seeAll)
+		{
+			IQueryable<SwapRequest> query = _context.SwapRequests.AsNoTracking().Include(x => x.Shift);
+
+			if (!seeAll)
+			{
+				query = query.Where(x => x.RequesterId == userId || x.TargetEmployeeId == userId);
+			}
+
+			return query;
 		}
 	}
 }

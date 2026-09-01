@@ -7,12 +7,14 @@ namespace Five68.Services
 {
 	public class SwapRequestService
 	{
-		private INotificationService _notificationService;
+		private ISwapRequestNotificationService _swapNotificationService;
+		private IShiftNotificationService _shiftNotificationService;
+
 		private readonly SwapRequestFacade _swapRequestFacade;
 		private readonly ShiftFacade _shiftFacade;
 		private readonly EmployeeFacade _employeeFacade;
 		private readonly UserFacade _userFacade;
-		private ILogger _logger;
+		private readonly ILogger _logger;
 
 		private enum SwapRequestAction
 		{
@@ -21,14 +23,16 @@ namespace Five68.Services
 		}
 
 		public SwapRequestService(
-			INotificationService notificationService,
+			ISwapRequestNotificationService notificationService,
+			IShiftNotificationService shiftNotificationService,
 			SwapRequestFacade swapRequestFacade,
 			ShiftFacade shiftFacade,
 			EmployeeFacade employeeFacade,
 			UserFacade userFacade,
 			ILogger<SwapRequestService> logger)
 		{
-			_notificationService = notificationService;
+			_swapNotificationService = notificationService;
+			_shiftNotificationService = shiftNotificationService;
 			_swapRequestFacade = swapRequestFacade;
 			_shiftFacade = shiftFacade;
 			_employeeFacade = employeeFacade;
@@ -43,6 +47,11 @@ namespace Five68.Services
 			if (shift.EmployeeId != requesterId)
 			{
 				throw new ForbiddenException("Non puoi richiedere il cambio di un turno non tuo");
+			}
+
+			if (shift.Date < DateOnly.FromDateTime(DateTime.UtcNow))
+			{
+				throw new EntityException("Non puoi richiedere il cambio di un turno passato");
 			}
 
 			List<Guid> targetIds = model.TargetEmployeeIds.Distinct().ToList();
@@ -71,7 +80,8 @@ namespace Five68.Services
 					Id = Guid.NewGuid(),
 					ShiftId = shift.Id,
 					RequesterId = requesterId,
-					TargetEmployeeId = targetId
+					TargetEmployeeId = targetId,
+					Shift = shift,
 				});
 			}
 
@@ -80,7 +90,7 @@ namespace Five68.Services
 			// notify only after db save
 			foreach (SwapRequest r in toCreate)
 			{
-				await _notificationService.NotifySwapRequestCreatedAsync(r);
+				await _swapNotificationService.NotifySwapRequestChangedAsync();
 				_logger.LogInformation($"User {requesterId} requested a shift swap on {shift.Date} for {r.TargetEmployeeId}");
 			}
 
@@ -90,6 +100,7 @@ namespace Five68.Services
 		public async Task<SwapRequestDTO> Accept(Guid swapRequestId, Guid requesterId)
 		{
 			SwapRequest request = await RequireCanAct(swapRequestId, requesterId, SwapRequestAction.Respond);
+
 			SwapRequestFacade.AcceptResult result = await _swapRequestFacade.TryAcceptAsync(swapRequestId, request.ShiftId, request.TargetEmployeeId);
 
 			if (result == SwapRequestFacade.AcceptResult.AlreadyHandled)
@@ -103,10 +114,11 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
+			await _swapNotificationService.NotifySwapRequestChangedAsync();
+			await _shiftNotificationService.NotifyShiftChangedAsync(updated.Shift.Date);
 			_logger.LogInformation($"User {requesterId} accepted swap request {swapRequestId}");
-			await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
-			return SwapRequestDTO.FromSwapRequest(await _swapRequestFacade.FindByIdAsync(swapRequestId));
+			return SwapRequestDTO.FromSwapRequest(updated);
 		}
 
 		public async Task<SwapRequestDTO> Reject(Guid swapRequestId, Guid requesterId)
@@ -119,8 +131,8 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
+			await _swapNotificationService.NotifySwapRequestChangedAsync();
 			_logger.LogInformation($"User {requesterId} rejected swap request {swapRequestId}");
-			await _notificationService.NotifySwapRequestRespondedAsync(updated);
 
 			return SwapRequestDTO.FromSwapRequest(updated);
 		}
@@ -135,22 +147,33 @@ namespace Five68.Services
 			}
 
 			SwapRequest updated = await _swapRequestFacade.FindByIdAsync(swapRequestId);
+			await _swapNotificationService.NotifySwapRequestChangedAsync();
 			_logger.LogInformation($"User {requesterId} cancelled swap request {swapRequestId}");
-			await _notificationService.NotifySwapRequestCancelledAsync(updated);
 
 			return SwapRequestDTO.FromSwapRequest(updated);
 		}
 
-		public async Task<IEnumerable<SwapRequestDTO>> GetForUser(Guid userId, UserRole role)
+		public async Task<IEnumerable<SwapRequestDTO>> GetForPendingUser(Guid userId, UserRole role)
 		{
 			bool seeAll = role is UserRole.Admin or UserRole.Manager;
-			return (await _swapRequestFacade.GetForUserAsync(userId, seeAll)).Select(SwapRequestDTO.FromSwapRequest);
+			return (await _swapRequestFacade.GetForPendingUserAsync(userId, seeAll)).Select(SwapRequestDTO.FromSwapRequest);
+		}
+
+		public async Task<IEnumerable<SwapRequestDTO>> GetHistoryForUser(Guid userId, UserRole role, int page, int pageSize)
+		{
+			bool seeAll = role is UserRole.Admin or UserRole.Manager;
+			return (await _swapRequestFacade.GetHistoryForUserAsync(userId, seeAll, page, pageSize)).Select(SwapRequestDTO.FromSwapRequest);
 		}
 
 		private async Task<SwapRequest> RequireCanAct(Guid swapRequestId, Guid requesterId, SwapRequestAction action)
 		{
 			SwapRequest request = await _swapRequestFacade.FindByIdAsync(swapRequestId) ?? throw new NotFoundException("Richiesta non trovata");
 			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
+
+			if (action == SwapRequestAction.Respond && request.Shift.Date < DateOnly.FromDateTime(DateTime.UtcNow))
+			{
+				throw new EntityException("Non puoi rispondere a una richiesta di cambio per un turno passato");
+			}
 
 			Guid authorizedUserId = action == SwapRequestAction.Respond ? request.TargetEmployeeId : request.RequesterId;
 			if (authorizedUserId != requesterId && requester.Role != UserRole.Admin)
