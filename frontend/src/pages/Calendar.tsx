@@ -19,6 +19,8 @@ export default function Calendar() {
 		currentMonday,
 		goToPrevWeek,
 		goToNextWeek,
+		goToToday,
+		isCurrentWeek,
 		getShiftForDay,
 		saveShift,
 		copyWeek,
@@ -95,14 +97,24 @@ export default function Calendar() {
 					<p className="font-bold text-slate-800">{month} {year}</p>
 					<p className="text-xs text-slate-400 mt-0.5">Settimana {weekNum}</p>
 				</div>
-				<button
-					onClick={goToNextWeek}
-					className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition"
-				>
-					<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-					</svg>
-				</button>
+				<div className="flex items-center gap-1">
+					{!isCurrentWeek && (
+						<button
+							onClick={goToToday}
+							className="rounded-xl px-3 h-9 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 transition"
+						>
+							Oggi
+						</button>
+					)}
+					<button
+						onClick={goToNextWeek}
+						className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition"
+					>
+						<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+						</svg>
+					</button>
+				</div>
 			</div>
 
 			{user?.role === 'admin' && (

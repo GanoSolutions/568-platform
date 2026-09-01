@@ -89,6 +89,9 @@ export function useCalendar() {
 		const d = new Date(prev); d.setDate(d.getDate() + 7); return d;
 	});
 
+	const goToToday = () => setCurrentMonday(getMondayOfWeek(new Date()));
+	const isCurrentWeek = formatDateKey(currentMonday) === formatDateKey(getMondayOfWeek(new Date()));
+
 	// Contatore di richiesta: se si cambia settimana più volte prima che una
 	// fetch precedente sia tornata, questo scarta il risultato di quella
 	// obsoleta invece di lasciarla sovrascrivere lo stato con dati di una
@@ -232,6 +235,8 @@ export function useCalendar() {
 		currentMonday,
 		goToPrevWeek,
 		goToNextWeek,
+		goToToday,
+		isCurrentWeek,
 		getShiftForDay,
 		saveShift,
 		copyWeek,
