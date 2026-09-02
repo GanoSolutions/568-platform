@@ -101,6 +101,13 @@ namespace Five68.Services
 			User requester = await RequireManagerOrAdmin(requesterId);
 
 			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
+
+			DateTime shiftEnd = shift.Date.ToDateTime(shift.StartTime).Add(shift.Duration);
+			if (shiftEnd < DateTime.Now)
+			{
+				throw new EntityException("Non è possibile eliminare un turno passato");
+			}
+
 			await _shiftFacade.DeleteAsync(shift);
 
 			await _notificationService.NotifyShiftChangedAsync(shift.Date);

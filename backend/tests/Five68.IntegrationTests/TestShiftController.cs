@@ -606,6 +606,66 @@ public class TestShiftController
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Delete_PastShiftManager_Returns422AndDoesNotRemove()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        Guid managerId = GetUserId(ManagerEmail);
+        Guid employeeId = CreateEmployee("sa-delete-past-manager@five68.com");
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2020, 1, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{shiftId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        ShiftExists(shiftId).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_PastShiftAdmin_Returns422AndDoesNotRemove()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+        Guid adminId = GetUserId(AdminEmail);
+        Guid employeeId = CreateEmployee("sa-delete-past-admin@five68.com");
+        Guid shiftId = SeedShift(employeeId, new DateOnly(2020, 1, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), adminId);
+
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{shiftId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        ShiftExists(shiftId).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_ShiftAlreadyEndedEarlierToday_Returns422AndDoesNotRemove()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        Guid managerId = GetUserId(ManagerEmail);
+        Guid employeeId = CreateEmployee("sa-delete-ended-today@five68.com");
+
+        DateTime shiftStart = DateTime.Now.AddHours(-3);
+        Guid shiftId = SeedShift(employeeId, DateOnly.FromDateTime(shiftStart), TimeOnly.FromDateTime(shiftStart), TimeSpan.FromHours(1), managerId);
+
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{shiftId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        ShiftExists(shiftId).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_ShiftStillOngoingOrFutureToday_Returns204AndRemoves()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        Guid managerId = GetUserId(ManagerEmail);
+        Guid employeeId = CreateEmployee("sa-delete-notended-today@five68.com");
+
+        DateTime shiftStart = DateTime.Now.AddHours(1);
+        Guid shiftId = SeedShift(employeeId, DateOnly.FromDateTime(shiftStart), TimeOnly.FromDateTime(shiftStart), TimeSpan.FromHours(8), managerId);
+
+        HttpResponseMessage response = await client_.DeleteAsync($"/shift/{shiftId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        ShiftExists(shiftId).Should().BeFalse();
+    }
+
     // --- POST /shift/copy-week ---
 
     // CopyWeekAsync reads every shift in the source week regardless of employee, and the
