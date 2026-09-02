@@ -106,146 +106,6 @@ public class TestUserController
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // --- POST /user/signup ---
-
-    [Fact]
-    public async Task Signup_AdminCreatesManager_Returns201()
-    {
-        await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = "new.manager@five68.com",
-            Password = Password,
-            Role = UserRole.Manager,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-    }
-
-    [Fact]
-    public async Task Signup_AdminCreatesEmployee_Returns201()
-    {
-        await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = "new.employee@five68.com",
-            Password = Password,
-            Role = UserRole.Employee,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-    }
-
-    [Fact]
-    public async Task Signup_ManagerCreatesEmployee_Returns201()
-    {
-        await AuthorizeAsAsync(ManagerEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = "another.employee@five68.com",
-            Password = Password,
-            Role = UserRole.Employee,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-    }
-
-    [Fact]
-    public async Task Signup_AdminCreatesAdmin_Returns403()
-    {
-        await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = "another.admin@five68.com",
-            Password = Password,
-            Role = UserRole.Admin,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task Signup_ManagerCreatesManager_Returns403()
-    {
-        await AuthorizeAsAsync(ManagerEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = "another.manager2@five68.com",
-            Password = Password,
-            Role = UserRole.Manager,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task Signup_EmployeeCreatesEmployee_Returns403()
-    {
-        await AuthorizeAsAsync(EmployeeEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = "yet.another@five68.com",
-            Password = Password,
-            Role = UserRole.Employee,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task Signup_DuplicateEmail_Returns422()
-    {
-        await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = EmployeeEmail,
-            Password = Password,
-            Role = UserRole.Employee,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
-    }
-
-    [Fact]
-    public async Task Signup_Unauthenticated_Returns401()
-    {
-        client_.DefaultRequestHeaders.Authorization = null;
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new UserRegister
-        {
-            Email = "noauth@five68.com",
-            Password = Password,
-            Role = UserRole.Employee,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task Signup_MissingEmail_Returns400()
-    {
-        await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new
-        {
-            Password = Password,
-            Role = UserRole.Employee,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task Signup_MissingPassword_Returns400()
-    {
-        await AuthorizeAsAsync(AdminEmail);
-        HttpResponseMessage response = await client_.PostAsJsonAsync("/user/signup", new
-        {
-            Email = "nopassword@five68.com",
-            Role = UserRole.Employee,
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
     // --- POST /user/{id}/invite ---
 
     [Fact]
@@ -311,15 +171,11 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_ValidToken_Returns200()
     {
-        (_, string token) = await CreateInvitedUserAsync("accept-returns200@five68.com");
+        (_, string token) = await CreateInvitedUserAsync("accept-returns200@five68.com", "RSSMRA80A01H501Z");
 
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = "RSSMRA80A01H501Z",
-            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -329,15 +185,11 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_ValidToken_SetsStatusToActive()
     {
-        (Guid id, string token) = await CreateInvitedUserAsync("accept-setsactive@five68.com");
+        (Guid id, string token) = await CreateInvitedUserAsync("accept-setsactive@five68.com", "RSSMRA80A01H501Y");
 
         await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = "RSSMRA80A01H501Y",
-            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -349,15 +201,11 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_ValidToken_ClearsInviteToken()
     {
-        (Guid id, string token) = await CreateInvitedUserAsync("accept-clearstoken@five68.com");
+        (Guid id, string token) = await CreateInvitedUserAsync("accept-clearstoken@five68.com", "RSSMRA80A01H501X");
 
         await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = "RSSMRA80A01H501X",
-            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -374,10 +222,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = "not-a-valid-token",
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = "RSSMRA80A01H501W",
-            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -401,10 +245,6 @@ public class TestUserController
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = "RSSMRA80A01H501W",
-            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
@@ -414,25 +254,17 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_TokenUsedTwice_Returns401()
     {
-        (_, string token) = await CreateInvitedUserAsync("accept-usedtwice@five68.com");
+        (_, string token) = await CreateInvitedUserAsync("accept-usedtwice@five68.com", "RSSMRA80A01H501V");
 
         await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = "RSSMRA80A01H501V",
-            Phone = "3331234567",
             Password = "NewP@ss1!"
         });
 
         HttpResponseMessage replayResponse = await client_.PostAsJsonAsync("/user/invite/accept", new InviteAccept
         {
             Token = token,
-            Name = "Mario",
-            Surname = "Rossi",
-            FiscalCode = "RSSMRA80A01H501V",
-            Phone = "3331234567",
             Password = "AnotherP@ss1!"
         });
 
@@ -472,18 +304,19 @@ public class TestUserController
         return body!["inviteToken"];
     }
 
-    // Ogni test che completa davvero l'accept-invite crea il proprio Employee (PK = UserId,
-    // FiscalCode unique) — serve un utente nuovo e dedicato per test, non EmployeeEmail
-    // condiviso, altrimenti il secondo accept-invite nella stessa collection fallisce
-    // per chiave duplicata.
-    private async Task<(Guid id, string token)> CreateInvitedUserAsync(string email)
+    // L'Employee nasce sempre insieme allo User via POST /employees — AcceptInvite si limita
+    // a impostare la password e attivare l'account. Ogni test usa una FiscalCode dedicata
+    // (constraint unique) per non collidere con gli altri nella stessa collection.
+    private async Task<(Guid id, string token)> CreateInvitedUserAsync(string email, string fiscalCode)
     {
         await AuthorizeAsAsync(AdminEmail);
-        await client_.PostAsJsonAsync("/user/signup", new UserRegister
+        await client_.PostAsJsonAsync("/employee", new EmployeeCreate
         {
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = fiscalCode,
             Email = email,
-            Password = Password,
-            Role = UserRole.Employee,
+            Phone = "3331234567",
         });
 
         string token = await GenerateInviteForAsync(email);

@@ -11,7 +11,6 @@ namespace Five68.Services
 	public class UserService
 	{
 		private readonly UserFacade _userFacade;
-		private readonly EmployeeFacade _employeeFacade;
 		private readonly ShiftFacade _shiftFacade;
 		private readonly TransactionFacade _transactionFacade;
 		private readonly AuthUtils _authUtils;
@@ -21,7 +20,6 @@ namespace Five68.Services
 
 		public UserService(
 			UserFacade userFacade,
-			EmployeeFacade employeeFacade,
 			ShiftFacade shiftFacade,
 			TransactionFacade transactionFacade,
 			AuthUtils authUtils,
@@ -30,7 +28,6 @@ namespace Five68.Services
 			ILogger<UserService> logger)
 		{
 			_userFacade = userFacade;
-			_employeeFacade = employeeFacade;
 			_shiftFacade = shiftFacade;
 			_transactionFacade = transactionFacade;
 			_authUtils = authUtils;
@@ -71,18 +68,20 @@ namespace Five68.Services
 			return (await _userFacade.GetAll()).Select(x => UserDTO.FromUser(x));
 		}
 
-		public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
+		public async Task<string> GenerateInvite(Guid userId, Guid requesterId, bool sendEmail)
 		{
 			(User requester, User user, string token) = await CreateInviteToken(userId, requesterId);
-			await _notificationService.SendInviteAsync(user.Email, token);
-			_logger.LogInformation($"User {requester.Id} ({requester.Email}) invited {user.Id} ({user.Email}) to change password");
-			return token;
-		}
 
-		public async Task<string> GenerateInviteLink(Guid userId, Guid requesterId)
-		{
-			(User requester, User user, string token) = await CreateInviteToken(userId, requesterId);
-			_logger.LogInformation($"User {requester.Id} ({requester.Email}) generated an invite link for {user.Id} ({user.Email}) without sending an email");
+			if (sendEmail)
+			{
+				await _notificationService.SendInviteAsync(user.Email, token);
+				_logger.LogInformation($"User {requester.Id} ({requester.Email}) invited {user.Id} ({user.Email}) to change password");
+			}
+			else
+			{
+				_logger.LogInformation($"User {requester.Id} ({requester.Email}) generated an invite link for {user.Id} ({user.Email}) without sending an email");
+			}
+
 			return token;
 		}
 
@@ -138,15 +137,6 @@ namespace Five68.Services
 			if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
 				throw new UnauthorizedException("Token di invito non valido o scaduto");
 
-			await _employeeFacade.CreateAsync(new Employee
-			{
-				UserId = user.Id,
-				Name = model.Name,
-				Surname = model.Surname,
-				FiscalCode = model.FiscalCode,
-				Phone = model.Phone,
-			});
-
 			user.PasswordHash = _userUtils.HashAndCheckPassword(model.Password);
 			user.Status = UserStatus.Active;
 			user.InviteToken = null;
@@ -154,29 +144,6 @@ namespace Five68.Services
 			_logger.LogInformation($"User {user.Id} ({user.Email}) accepted invite");
 
 			await _userFacade.UpdateAsync(user);
-		}
-
-		public async Task CreateUser(UserRegister model, Guid userId)
-		{
-			User requester = await _userFacade.FindByIdAsync(userId);
-			if (requester is null)
-			{
-				throw new UnauthorizedException();
-			}
-			_logger.LogInformation($"User {requester.Id} ({requester.Email}) requested signup of user {model.Email}");
-
-			if (model.Role <= requester.Role)
-			{
-				throw new ForbiddenException("Non puoi creare un utente con un ruolo uguale o superiore al tuo");
-			}
-
-			User existing = await _userFacade.FindByEmailAsync(model.Email);
-			if (existing is not null)
-			{
-				throw new EntityException("Email già in uso");
-			}
-
-			await _userFacade.CreateAsync(model.Email, model.Role, UserStatus.Disabled, _userUtils.HashAndCheckPassword(model.Password));
 		}
 
 		public async Task ChangePassword(Guid userId, ChangePassword model)
