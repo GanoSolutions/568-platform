@@ -15,6 +15,7 @@ RUN dotnet publish -c $BUILD_ENV -o /app/publish
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 ARG BUILD_ENV
 ENV DOTNET_RUNNING_ENVIRONMENT=$BUILD_ENV
+ENV TZ=Europe/Rome
 
 WORKDIR /app
 COPY --from=build /app/publish .

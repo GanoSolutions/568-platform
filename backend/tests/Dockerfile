@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0
 
 ARG TEST_PROJECT=Five68.UnitTests
 ENV TEST_PROJECT=${TEST_PROJECT}
+ENV TZ=Europe/Rome
 
 WORKDIR /project/src
 
