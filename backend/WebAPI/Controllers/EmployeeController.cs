@@ -26,7 +26,6 @@ namespace Five68.Controllers
 		/// <response code="200">Elenco dipendenti.</response>
 		/// <response code="401">Il chiamante non è autenticato.</response>
 		[HttpGet("")]
-		[HttpGet("/employees")]
 		public async Task<IActionResult> GetAll()
 		{
 			return Ok(await _employeeService.GetAll());

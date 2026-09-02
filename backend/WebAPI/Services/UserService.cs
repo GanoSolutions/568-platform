@@ -13,6 +13,7 @@ namespace Five68.Services
 		private readonly UserFacade _userFacade;
 		private readonly ShiftFacade _shiftFacade;
 		private readonly TransactionFacade _transactionFacade;
+		private readonly RefreshTokenFacade _refreshTokenFacade;
 		private readonly AuthUtils _authUtils;
 		private readonly UserUtils _userUtils;
 		private readonly IInviteService _notificationService;
@@ -22,6 +23,7 @@ namespace Five68.Services
 			UserFacade userFacade,
 			ShiftFacade shiftFacade,
 			TransactionFacade transactionFacade,
+			RefreshTokenFacade refreshTokenFacade,
 			AuthUtils authUtils,
 			UserUtils userUtils,
 			IInviteService notificationService,
@@ -30,6 +32,7 @@ namespace Five68.Services
 			_userFacade = userFacade;
 			_shiftFacade = shiftFacade;
 			_transactionFacade = transactionFacade;
+			_refreshTokenFacade = refreshTokenFacade;
 			_authUtils = authUtils;
 			_userUtils = userUtils;
 			_notificationService = notificationService;
@@ -87,19 +90,19 @@ namespace Five68.Services
 
 		private async Task<(User requester, User user, string token)> CreateInviteToken(Guid userId, Guid requesterId)
 		{
-			User requester = await _userFacade.FindByIdAsync(requesterId);
-			if (requester is null)
-			{
-				throw new UnauthorizedException();
-			}
+			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
+
 			if (requester.Role >= UserRole.Employee)
 			{
 				throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
 			}
 
-			User user = await _userFacade.FindByIdAsync(userId);
-			if (user is null)
-				throw new NotFoundException("Utente non trovato");
+			User user = await _userFacade.FindByIdAsync(userId) ?? throw new NotFoundException("Utente non trovato");
+
+			if (user.Status != UserStatus.Pending)
+			{
+				throw new EntityException("Si può generare un invito solo per un account in stato Pending");
+			}
 
 			string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
@@ -126,6 +129,7 @@ namespace Five68.Services
 			{
 				await _userFacade.UpdateAsync(user);
 				await _shiftFacade.DeleteFutureAssignmentsForEmployeeAsync(id, DateOnly.FromDateTime(DateTime.UtcNow));
+				await _refreshTokenFacade.DeleteUserRefreshTokens(id);
 			});
 
 			_logger.LogInformation($"User {requester.Id} ({requester.Email}) disabled user {id} ({user.Email})");

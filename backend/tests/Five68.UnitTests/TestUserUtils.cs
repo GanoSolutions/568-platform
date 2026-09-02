@@ -1,6 +1,7 @@
 ﻿using BCrypt.Net;
 using Easy_Password_Validator;
 using Easy_Password_Validator.Models;
+using Five68.Exceptions;
 using Five68.Models;
 using Five68.Utils;
 using FluentAssertions;
@@ -52,11 +53,11 @@ public class TestUserUtils
 	}
 
 	[Fact]
-	public void HashAndCheckPassword_WeakPassword_ThrowsArgumentException()
+	public void HashAndCheckPassword_WeakPassword_ThrowsEntityException()
 	{
 		Action act = () => sut_.HashAndCheckPassword("1234");
 
-		act.Should().Throw<ArgumentException>();
+		act.Should().Throw<EntityException>();
 	}
 
 	// --- CheckPassword ---

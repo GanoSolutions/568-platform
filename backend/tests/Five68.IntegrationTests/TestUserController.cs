@@ -21,6 +21,9 @@ public class TestUserController
     private const string AdminEmail = "admin@five68.com";
     private const string ManagerEmail = "manager@five68.com";
     private const string EmployeeEmail = "employee@five68.com";
+    // Dedicato ai test che devono invitare un account effettivamente in stato Pending —
+    // EmployeeEmail resta Active perché serve per autenticarsi come Employee altrove.
+    private const string PendingEmployeeEmail = "pending-employee@five68.com";
     private const string Password = "ValidP@ss1!";
 
     public TestUserController(Five68WebAppFactory factory)
@@ -30,9 +33,10 @@ public class TestUserController
         SeedUser(AdminEmail, Password, UserRole.Admin);
         SeedUser(ManagerEmail, Password, UserRole.Manager);
         SeedUser(EmployeeEmail, Password, UserRole.Employee);
+        SeedUser(PendingEmployeeEmail, Password, UserRole.Employee, UserStatus.Pending);
     }
 
-    private void SeedUser(string email, string password, UserRole role)
+    private void SeedUser(string email, string password, UserRole role, UserStatus status = UserStatus.Active)
     {
         using IServiceScope scope = factory_.Services.CreateScope();
         Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
@@ -46,7 +50,7 @@ public class TestUserController
             Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4),
             Role = role,
-            Status = UserStatus.Active,
+            Status = status,
         });
         db.SaveChanges();
     }
@@ -112,7 +116,7 @@ public class TestUserController
     public async Task Invite_AdminInvitesEmployee_Returns200WithToken()
     {
         await AuthorizeAsAsync(AdminEmail);
-        Guid id = GetUserId(EmployeeEmail);
+        Guid id = GetUserId(PendingEmployeeEmail);
 
         HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
 
@@ -125,13 +129,15 @@ public class TestUserController
     public async Task Invite_AdminInvitesEmployee_SetsStatusToPending()
     {
         await AuthorizeAsAsync(AdminEmail);
-        Guid id = GetUserId(EmployeeEmail);
+        Guid id = GetUserId(PendingEmployeeEmail);
 
         await client_.PostAsync($"/user/{id}/invite", null);
 
         using IServiceScope scope = factory_.Services.CreateScope();
         Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-        db.Users.First(u => u.Id == id).Status.Should().Be(UserStatus.Pending);
+        User user = db.Users.First(u => u.Id == id);
+        user.Status.Should().Be(UserStatus.Pending);
+        user.InviteToken.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
@@ -159,11 +165,197 @@ public class TestUserController
     public async Task Invite_Unauthenticated_Returns401()
     {
         client_.DefaultRequestHeaders.Authorization = null;
-        Guid id = GetUserId(EmployeeEmail);
+        Guid id = GetUserId(PendingEmployeeEmail);
 
         HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Invite_TargetActive_Returns422()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+        Guid id = GetUserId(ManagerEmail);
+
+        HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task Invite_TargetDisabled_Returns422()
+    {
+        (Guid id, _) = await CreateInvitedUserAsync("invite-target-disabled@five68.com", "RSSMRA80A01H501T");
+        await AuthorizeAsAsync(AdminEmail);
+        await client_.DeleteAsync($"/user/{id}");
+
+        HttpResponseMessage response = await client_.PostAsync($"/user/{id}/invite", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    // --- GET /user/{id}/invite-link ---
+
+    [Fact]
+    public async Task InviteLink_AdminGeneratesLink_Returns200WithToken()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+        Guid id = GetUserId(PendingEmployeeEmail);
+
+        HttpResponseMessage response = await client_.GetAsync($"/user/{id}/invite-link");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Dictionary<string, string>? body = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        body!["inviteToken"].Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task InviteLink_EmployeeRequests_Returns403()
+    {
+        await AuthorizeAsAsync(EmployeeEmail);
+        Guid id = GetUserId(AdminEmail);
+
+        HttpResponseMessage response = await client_.GetAsync($"/user/{id}/invite-link");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task InviteLink_TargetActive_Returns422()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+        Guid id = GetUserId(ManagerEmail);
+
+        HttpResponseMessage response = await client_.GetAsync($"/user/{id}/invite-link");
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    // --- DELETE /user/{id} ---
+
+    [Fact]
+    public async Task Delete_AdminDisablesEmployee_Returns204()
+    {
+        (Guid id, _) = await CreateInvitedUserAsync("delete-returns204@five68.com", "RSSMRA80A01H501S");
+
+        await AuthorizeAsAsync(AdminEmail);
+        HttpResponseMessage response = await client_.DeleteAsync($"/user/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Delete_SetsStatusToDisabled()
+    {
+        (Guid id, _) = await CreateInvitedUserAsync("delete-setsdisabled@five68.com", "RSSMRA80A01H501R");
+
+        await AuthorizeAsAsync(AdminEmail);
+        await client_.DeleteAsync($"/user/{id}");
+
+        using IServiceScope scope = factory_.Services.CreateScope();
+        Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+        db.Users.First(u => u.Id == id).Status.Should().Be(UserStatus.Disabled);
+    }
+
+    [Fact]
+    public async Task Delete_RevokesRefreshToken()
+    {
+        const string email = "delete-revokes-token@five68.com";
+        (Guid id, _) = await CreateInvitedUserAsync(email, "RSSMRA80A01H501Q");
+
+        using (IServiceScope scope = factory_.Services.CreateScope())
+        {
+            Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+            User user = db.Users.First(u => u.Id == id);
+            user.Status = UserStatus.Active;
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(Password, workFactor: 4);
+            db.SaveChanges();
+        }
+
+        HttpResponseMessage loginResponse = await client_.PostAsJsonAsync("/auth/login", new UserLogin
+        {
+            Email = email,
+            Password = Password,
+        });
+        Tokens? tokens = await loginResponse.Content.ReadFromJsonAsync<Tokens>();
+
+        await AuthorizeAsAsync(AdminEmail);
+        await client_.DeleteAsync($"/user/{id}");
+
+        using (IServiceScope scope = factory_.Services.CreateScope())
+        {
+            Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+            db.RefreshTokens.Any(t => t.UserId == id).Should().BeFalse();
+        }
+
+        HttpResponseMessage refreshResponse = await client_.PostAsJsonAsync("/auth/refresh", tokens);
+        refreshResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Delete_EmployeeDeletes_Returns403()
+    {
+        await AuthorizeAsAsync(EmployeeEmail);
+        Guid id = GetUserId(AdminEmail);
+
+        HttpResponseMessage response = await client_.DeleteAsync($"/user/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Delete_UnknownUser_Returns404()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+
+        HttpResponseMessage response = await client_.DeleteAsync($"/user/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Delete_Unauthenticated_Returns401()
+    {
+        client_.DefaultRequestHeaders.Authorization = null;
+        HttpResponseMessage response = await client_.DeleteAsync($"/user/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // --- POST /employee: race condition su unicità (email/codice fiscale) ---
+
+    [Fact]
+    public async Task Create_ConcurrentDuplicateFiscalCode_OneSucceedsOneReturns422()
+    {
+        await AuthorizeAsAsync(AdminEmail);
+
+        EmployeeCreate first = new()
+        {
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501P",
+            Email = "race-1@five68.com",
+            Phone = "3331234567",
+        };
+        EmployeeCreate second = new()
+        {
+            Name = "Mario",
+            Surname = "Rossi",
+            FiscalCode = "RSSMRA80A01H501P",
+            Email = "race-2@five68.com",
+            Phone = "3331234567",
+        };
+
+        Task<HttpResponseMessage> firstRequest = client_.PostAsJsonAsync("/employee", first);
+        Task<HttpResponseMessage> secondRequest = client_.PostAsJsonAsync("/employee", second);
+        HttpStatusCode[] statusCodes = (await Task.WhenAll(firstRequest, secondRequest))
+            .Select(r => r.StatusCode)
+            .ToArray();
+
+        statusCodes.Should().Contain(HttpStatusCode.Created);
+        statusCodes.Should().Contain(HttpStatusCode.UnprocessableEntity);
+        statusCodes.Should().NotContain(HttpStatusCode.InternalServerError);
     }
 
     // --- POST /user/invite/accept ---
@@ -231,8 +423,8 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_ExpiredToken_Returns401()
     {
-        string token = await GenerateInviteForAsync(EmployeeEmail);
-        Guid id = GetUserId(EmployeeEmail);
+        string token = await GenerateInviteForAsync(PendingEmployeeEmail);
+        Guid id = GetUserId(PendingEmployeeEmail);
 
         using (IServiceScope scope = factory_.Services.CreateScope())
         {
@@ -285,7 +477,7 @@ public class TestUserController
     [Fact]
     public async Task AcceptInvite_MissingPassword_Returns400()
     {
-        string token = await GenerateInviteForAsync(EmployeeEmail);
+        string token = await GenerateInviteForAsync(PendingEmployeeEmail);
 
         HttpResponseMessage response = await client_.PostAsJsonAsync("/user/invite/accept", new
         {
@@ -304,7 +496,7 @@ public class TestUserController
         return body!["inviteToken"];
     }
 
-    // L'Employee nasce sempre insieme allo User via POST /employees — AcceptInvite si limita
+    // L'Employee nasce sempre insieme allo User via POST /employee — AcceptInvite si limita
     // a impostare la password e attivare l'account. Ogni test usa una FiscalCode dedicata
     // (constraint unique) per non collidere con gli altri nella stessa collection.
     private async Task<(Guid id, string token)> CreateInvitedUserAsync(string email, string fiscalCode)

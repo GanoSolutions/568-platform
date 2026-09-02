@@ -222,6 +222,33 @@ public class TestAuthController
 	}
 
 	[Fact]
+	public async Task Refresh_UserDisabledAfterLogin_Returns401()
+	{
+		var tokens = await LoginAsync(TestEmail, TestPassword);
+
+		using (var scope = factory_.Services.CreateScope())
+		{
+			var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+			var user = db.Users.First(u => u.Email == TestEmail);
+			user.Status = UserStatus.Disabled;
+			db.SaveChanges();
+		}
+
+		var response = await client_.PostAsJsonAsync("/auth/refresh", tokens);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+		// Ripristina lo stato per non rompere gli altri test della collection che riusano TestEmail.
+		using (var scope = factory_.Services.CreateScope())
+		{
+			var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+			var user = db.Users.First(u => u.Email == TestEmail);
+			user.Status = UserStatus.Active;
+			db.SaveChanges();
+		}
+	}
+
+	[Fact]
 	public async Task Refresh_EmptyAccessToken_Returns401()
 	{
 		var tokens = await LoginAsync(TestEmail, TestPassword);

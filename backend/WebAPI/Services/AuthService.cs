@@ -54,15 +54,21 @@ namespace Five68.Services
 		public async Task<Tokens> Refresh(Tokens token)
 		{
 			ClaimsPrincipal principal = jwtService_.GetPrincipalFromExpiredToken(token.AccessToken);
-			string? email = principal.FindFirst(ClaimTypes.Email)?.Value;
-			string? userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+			string email = principal.FindFirst(ClaimTypes.Email)?.Value;
+			string userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
 			if (email is null || userId is null || !Guid.TryParse(userId, out Guid id))
 			{
 				throw new UnauthorizedException("Token non valido");
 			}
 
-			UserRefreshTokens? savedRefreshToken = await refreshTokenFacade_.ConsumeRefreshToken(id);
+			User u = await userService_.Get(id);
+			if (u is null || u.Status != UserStatus.Active)
+			{
+				throw new UnauthorizedException("Account non attivo");
+			}
+
+			UserRefreshTokens savedRefreshToken = await refreshTokenFacade_.ConsumeRefreshToken(id);
 			if (savedRefreshToken is null || savedRefreshToken.RefreshToken != token.RefreshToken || savedRefreshToken.ExpirationDate < DateTime.UtcNow)
 			{
 				throw new UnauthorizedException("Refresh token non valido o scaduto");
