@@ -50,7 +50,7 @@ namespace Five68.Services
 				throw new ForbiddenException("Non puoi richiedere il cambio di un turno non tuo");
 			}
 
-			if (shift.Date < DateOnly.FromDateTime(DateTime.UtcNow))
+			if (shift.Date < DateOnly.FromDateTime(DateTime.Now))
 			{
 				throw new EntityException("Non puoi richiedere il cambio di un turno passato");
 			}
@@ -171,7 +171,7 @@ namespace Five68.Services
 			SwapRequest request = await _swapRequestFacade.FindByIdAsync(swapRequestId) ?? throw new NotFoundException("Richiesta non trovata");
 			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
 
-			if (action == SwapRequestAction.Respond && request.Shift.Date < DateOnly.FromDateTime(DateTime.UtcNow))
+			if (action == SwapRequestAction.Respond && request.Shift.Date < DateOnly.FromDateTime(DateTime.Now))
 			{
 				throw new EntityException("Non puoi rispondere a una richiesta di cambio per un turno passato");
 			}
