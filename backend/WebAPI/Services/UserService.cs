@@ -12,6 +12,9 @@ namespace Five68.Services
 	{
 		private readonly UserFacade _userFacade;
 		private readonly EmployeeFacade _employeeFacade;
+		private readonly ShiftFacade _shiftFacade;
+		private readonly TransactionFacade _transactionFacade;
+		private readonly AuthUtils _authUtils;
 		private readonly UserUtils _userUtils;
 		private readonly IInviteService _notificationService;
 		private readonly ILogger _logger;
@@ -19,12 +22,18 @@ namespace Five68.Services
 		public UserService(
 			UserFacade userFacade,
 			EmployeeFacade employeeFacade,
+			ShiftFacade shiftFacade,
+			TransactionFacade transactionFacade,
+			AuthUtils authUtils,
 			UserUtils userUtils,
 			IInviteService notificationService,
 			ILogger<UserService> logger)
 		{
 			_userFacade = userFacade;
 			_employeeFacade = employeeFacade;
+			_shiftFacade = shiftFacade;
+			_transactionFacade = transactionFacade;
+			_authUtils = authUtils;
 			_userUtils = userUtils;
 			_notificationService = notificationService;
 			_logger = logger;
@@ -64,6 +73,21 @@ namespace Five68.Services
 
 		public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
 		{
+			(User requester, User user, string token) = await CreateInviteToken(userId, requesterId);
+			await _notificationService.SendInviteAsync(user.Email, token);
+			_logger.LogInformation($"User {requester.Id} ({requester.Email}) invited {user.Id} ({user.Email}) to change password");
+			return token;
+		}
+
+		public async Task<string> GenerateInviteLink(Guid userId, Guid requesterId)
+		{
+			(User requester, User user, string token) = await CreateInviteToken(userId, requesterId);
+			_logger.LogInformation($"User {requester.Id} ({requester.Email}) generated an invite link for {user.Id} ({user.Email}) without sending an email");
+			return token;
+		}
+
+		private async Task<(User requester, User user, string token)> CreateInviteToken(Guid userId, Guid requesterId)
+		{
 			User requester = await _userFacade.FindByIdAsync(requesterId);
 			if (requester is null)
 			{
@@ -85,9 +109,27 @@ namespace Five68.Services
 			user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
 
 			await _userFacade.UpdateAsync(user);
-			await _notificationService.SendInviteAsync(user.Email, token);
-			_logger.LogInformation($"User {requester.Email} invited {user.Email} to change password");
-			return token;
+
+			return (requester, user, token);
+		}
+
+		public async Task Delete(Guid id, Guid requesterId)
+		{
+			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
+			User user = await _userFacade.FindByIdAsync(id) ?? throw new NotFoundException("Utente non trovato");
+
+			// Soft-delete: NON si cancella la riga User/Employee (cascaderebbe su Shift/SwapRequest
+			// storici, vedi Five68DbContext.cs OnDelete=Cascade su quelle FK). Si disabilita
+			// l'account e si rimuove solo dalle giornate future, come richiesto dallo spec.
+			user.Status = UserStatus.Disabled;
+
+			await _transactionFacade.ExecuteAsync(async () =>
+			{
+				await _userFacade.UpdateAsync(user);
+				await _shiftFacade.DeleteFutureAssignmentsForEmployeeAsync(id, DateOnly.FromDateTime(DateTime.UtcNow));
+			});
+
+			_logger.LogInformation($"User {requester.Id} ({requester.Email}) disabled user {id} ({user.Email})");
 		}
 
 		public async Task AcceptInvite(InviteAccept model)
@@ -109,7 +151,7 @@ namespace Five68.Services
 			user.Status = UserStatus.Active;
 			user.InviteToken = null;
 			user.InviteTokenExpiry = null;
-			_logger.LogInformation($"User {user.Email} accepted invite");
+			_logger.LogInformation($"User {user.Id} ({user.Email}) accepted invite");
 
 			await _userFacade.UpdateAsync(user);
 		}
@@ -121,7 +163,7 @@ namespace Five68.Services
 			{
 				throw new UnauthorizedException();
 			}
-			_logger.LogInformation($"User {requester.Email} requested signup of user {model.Email}");
+			_logger.LogInformation($"User {requester.Id} ({requester.Email}) requested signup of user {model.Email}");
 
 			if (model.Role <= requester.Role)
 			{
@@ -134,14 +176,7 @@ namespace Five68.Services
 				throw new EntityException("Email già in uso");
 			}
 
-			await _userFacade.CreateAsync(new User
-			{
-				Id = Guid.NewGuid(),
-				Email = model.Email,
-				PasswordHash = _userUtils.HashAndCheckPassword(model.Password),
-				Role = model.Role,
-				Status = UserStatus.Disabled,
-			});
+			await _userFacade.CreateAsync(model.Email, model.Role, UserStatus.Disabled, _userUtils.HashAndCheckPassword(model.Password));
 		}
 
 		public async Task ChangePassword(Guid userId, ChangePassword model)

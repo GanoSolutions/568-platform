@@ -12,10 +12,20 @@ namespace Five68.Facades
 			context_ = context;
 		}
 
-		internal async Task CreateAsync(User user)
+		internal async Task<User> CreateAsync(string email, UserRole role, UserStatus status, string passwordHash = null)
 		{
+			User user = new()
+			{
+				Id = Guid.NewGuid(),
+				Email = email,
+				Role = role,
+				Status = status,
+				PasswordHash = passwordHash,
+			};
+
 			await context_.Users.AddAsync(user);
 			await context_.SaveChangesAsync();
+			return user;
 		}
 
 		internal async Task UpdateAsync(User user)

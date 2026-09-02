@@ -30,5 +30,19 @@ namespace Five68.Facades
 		{
 			return await context_.Employees.FirstOrDefaultAsync(x => x.UserId == userId);
 		}
+
+		internal async Task<IEnumerable<Employee>> GetAllAsync()
+		{
+			return await context_.Employees
+				.Where(x => context_.Users.Any(u => u.Id == x.UserId && u.Status != UserStatus.Disabled))
+				.ToListAsync();
+		}
+
+		internal async Task<Employee> FindByFiscalCodeAsync(string fiscalCode)
+		{
+			return await context_.Employees.FirstOrDefaultAsync(x => x.FiscalCode == fiscalCode);
+		}
+
+
 	}
 }

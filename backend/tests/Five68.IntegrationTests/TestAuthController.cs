@@ -115,7 +115,8 @@ public class TestAuthController
 
 		using var scope = factory_.Services.CreateScope();
 		var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-		db.RefreshTokens.Any(t => t.Email == TestEmail).Should().BeFalse();
+		var userId = db.Users.First(u => u.Email == TestEmail).Id;
+		db.RefreshTokens.Any(t => t.UserId == userId).Should().BeFalse();
 	}
 
 	[Fact]
@@ -209,7 +210,8 @@ public class TestAuthController
 		using (var scope = factory_.Services.CreateScope())
 		{
 			var db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-			var stored = db.RefreshTokens.First(t => t.Email == TestEmail);
+			var userId = db.Users.First(u => u.Email == TestEmail).Id;
+			var stored = db.RefreshTokens.First(t => t.UserId == userId);
 			stored.ExpirationDate = DateTime.UtcNow.AddDays(-1);
 			db.SaveChanges();
 		}

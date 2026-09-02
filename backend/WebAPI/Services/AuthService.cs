@@ -13,12 +13,14 @@ namespace Five68.Services
 		private readonly UserService userService_;
 		private readonly JwtService jwtService_;
 		private readonly RefreshTokenFacade refreshTokenFacade_;
+		private readonly ILogger<AuthService> logger_;
 
-		public AuthService(UserService userService, JwtService jwtService, RefreshTokenFacade refreshTokenFacade)
+		public AuthService(UserService userService, JwtService jwtService, RefreshTokenFacade refreshTokenFacade, ILogger<AuthService> logger)
 		{
 			userService_ = userService;
 			jwtService_ = jwtService;
 			refreshTokenFacade_ = refreshTokenFacade;
+			logger_ = logger;
 		}
 
 		public async Task<Tokens> Login(UserLogin userData)
@@ -40,9 +42,11 @@ namespace Five68.Services
 			await refreshTokenFacade_.UpsertUserRefreshTokens(new UserRefreshTokens
 			{
 				RefreshToken = token.RefreshToken,
-				Email = user.Email,
+				UserId = user.Id,
 				ExpirationDate = DateTime.UtcNow + TimeSpan.FromDays(1)
 			});
+
+			logger_.LogInformation($"User {user.Id} ({user.Email}) has logged in");
 
 			return token;
 		}
@@ -58,7 +62,7 @@ namespace Five68.Services
 				throw new UnauthorizedException("Token non valido");
 			}
 
-			UserRefreshTokens? savedRefreshToken = await refreshTokenFacade_.ConsumeRefreshToken(email);
+			UserRefreshTokens? savedRefreshToken = await refreshTokenFacade_.ConsumeRefreshToken(id);
 			if (savedRefreshToken is null || savedRefreshToken.RefreshToken != token.RefreshToken || savedRefreshToken.ExpirationDate < DateTime.UtcNow)
 			{
 				throw new UnauthorizedException("Refresh token non valido o scaduto");
@@ -68,16 +72,16 @@ namespace Five68.Services
 			await refreshTokenFacade_.UpsertUserRefreshTokens(new UserRefreshTokens
 			{
 				RefreshToken = newTokens.RefreshToken,
-				Email = email,
+				UserId = id,
 				ExpirationDate = DateTime.UtcNow.AddDays(1),
 			});
 
 			return newTokens;
 		}
 
-		public async Task Logout(string email)
+		public async Task Logout(Guid userId)
 		{
-			await refreshTokenFacade_.DeleteUserRefreshTokens(email);
+			await refreshTokenFacade_.DeleteUserRefreshTokens(userId);
 		}
 
 	}
