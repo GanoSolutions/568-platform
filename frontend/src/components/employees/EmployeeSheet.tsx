@@ -6,13 +6,22 @@ import type { EmployeeDetail } from '@/types';
 
 interface EmployeeFormData {
 	name: string
+	surname: string
 	fiscalCode: string
 	email: string
 	phone: string
 	contractEnd: string
 }
 
-const EMPTY_FORM: EmployeeFormData = { name: '', fiscalCode: '', email: '', phone: '', contractEnd: '' };
+const EMPTY_FORM: EmployeeFormData = { name: '', surname: '', fiscalCode: '', email: '', phone: '', contractEnd: '' };
+
+/** Il nome completo (EmployeeDetail.name) meno il cognome, per precompilare il
+ * campo "Nome" separato — name è sempre costruito come `${nome} ${cognome}`.trim()
+ * (mapUserDTOToEmployee), quindi togliere gli ultimi surname.length caratteri
+ * isola sempre il nome, anche se contiene spazi. */
+function splitFirstName(fullName: string, surname: string): string {
+	return fullName.slice(0, fullName.length - surname.length).trim();
+}
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
 	return (
@@ -48,7 +57,8 @@ interface EmployeeSheetProps {
 export default function EmployeeSheet({ employee, onSave, onClose, saveError }: EmployeeSheetProps) {
 	const isEdit = !!employee;
 	const [form, setForm] = useState<EmployeeFormData>(isEdit ? {
-		name: employee.name,
+		name: splitFirstName(employee.name, employee.surname),
+		surname: employee.surname,
 		fiscalCode: employee.fiscalCode,
 		email: employee.email ?? '',
 		phone: employee.phone,
@@ -61,7 +71,8 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 		if (!employee) return;
 
 		setForm({
-			name: employee.name,
+			name: splitFirstName(employee.name, employee.surname),
+			surname: employee.surname,
 			fiscalCode: employee.fiscalCode,
 			email: employee.email ?? '',
 			phone: employee.phone,
@@ -74,6 +85,7 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 	const validate = () => {
 		const e: Record<string, string> = {};
 		if (!form.name.trim()) e.name = 'Campo obbligatorio';
+		if (!form.surname.trim()) e.surname = 'Campo obbligatorio';
 		if (!form.fiscalCode.trim()) e.fiscalCode = 'Campo obbligatorio';
 		if (!form.email.trim()) e.email = 'Campo obbligatorio';
 		else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email non valida';
@@ -89,6 +101,7 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 		try {
 			await onSave({
 				name: form.name.trim(),
+				surname: form.surname.trim(),
 				fiscalCode: form.fiscalCode.trim().toUpperCase(),
 				email: form.email.trim().toLowerCase(),
 				phone: form.phone.trim(),
@@ -109,9 +122,14 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 				</SheetHeader>
 
 				<div className="space-y-4">
-					<Field label="Nome e cognome" required>
-						<Input value={form.name} onChange={set('name')} placeholder="Mario Rossi" autoComplete="name" />
+					<Field label="Nome" required>
+						<Input value={form.name} onChange={set('name')} placeholder="Mario" autoComplete="given-name" />
 						{errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
+					</Field>
+
+					<Field label="Cognome" required>
+						<Input value={form.surname} onChange={set('surname')} placeholder="Rossi" autoComplete="family-name" />
+						{errors.surname && <p className="text-red-400 text-xs mt-1">{errors.surname}</p>}
 					</Field>
 
 					<Field label="Codice fiscale" required>
