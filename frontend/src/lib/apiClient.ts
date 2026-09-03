@@ -99,6 +99,20 @@ export interface ShiftUpdatePayload {
 	duration: string;
 }
 
+/** Mirror of the C# ShiftCopyWeek — dates as "YYYY-MM-DD". */
+export interface ShiftCopyWeekPayload {
+	sourceWeekMonday: string;
+	targetStartDate: string;
+	targetEndDate: string;
+}
+
+/** Mirror of the C# ShiftCopyWeekResult. */
+export interface ShiftCopyWeekResult {
+	created: number;
+	overwritten: number;
+	skippedClosedDays: number;
+}
+
 export interface ChangePasswordPayload {
 	currentPassword: string;
 	newPassword: string;
@@ -360,6 +374,8 @@ export const shiftApi = {
 	update: (id: string, payload: ShiftUpdatePayload) => api.put<ShiftDTO>(`/shift/${id}`, payload),
 
 	del: (id: string) => api.del<void>(`/shift/${id}`),
+
+	copyWeek: (payload: ShiftCopyWeekPayload) => api.post<ShiftCopyWeekResult>('/shift/copy-week', payload),
 };
 
 /** Mirror of the C# ClosedDayDTO. */

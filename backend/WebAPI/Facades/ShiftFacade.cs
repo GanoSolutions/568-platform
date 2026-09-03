@@ -1,5 +1,8 @@
 using Five68.Models;
+using Five68.Models.DTO;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using NLog.Targets;
 
 namespace Five68.Facades
 {
@@ -58,5 +61,64 @@ namespace Five68.Facades
 			return await context_.ClosedDays.AnyAsync(x => x.Date == date);
 		}
 
+		internal async Task<ShiftCopyWeekResult> CopyWeekAsync(DateOnly sourceWeekMonday, DateOnly targetStartDate, DateOnly targetEndDate, Guid requesterId)
+		{
+			List<Shift> sourceShifts = await context_.Shifts
+				.Where(x => x.Date >= sourceWeekMonday && x.Date <= sourceWeekMonday.AddDays(6))
+				.ToListAsync();
+
+			if (sourceShifts.Count == 0)
+			{
+				return null;
+			}
+
+			await using IDbContextTransaction transaction = await context_.Database.BeginTransactionAsync();
+			ShiftCopyWeekResult outcome = new();
+			List<Shift> toCreate = new();
+
+			for (DateOnly targetMonday = targetStartDate; targetMonday <= targetEndDate; targetMonday = targetMonday.AddDays(7))
+			{
+				foreach (Shift source in sourceShifts)
+				{
+					int offset = source.Date.DayNumber - sourceWeekMonday.DayNumber;
+					DateOnly targetDate = targetMonday.AddDays(offset);
+					if (targetDate == source.Date) continue;
+
+					if (await context_.ClosedDays.AnyAsync(x => x.Date == targetDate))
+					{
+						outcome.SkippedClosedDays++;
+						continue;
+					}
+
+					bool existing = await context_.Shifts.AnyAsync(x => x.Date == targetDate && x.EmployeeId == source.EmployeeId);
+					if (existing)
+					{
+						await context_.Shifts
+							.Where(x => x.Date == targetDate && x.EmployeeId == source.EmployeeId)
+							.ExecuteDeleteAsync();
+						outcome.Overwritten++;
+					}
+					else
+					{
+						outcome.Created++;
+					}
+
+					toCreate.Add(new Shift
+					{
+						Id = Guid.NewGuid(),
+						Date = targetDate,
+						EmployeeId = source.EmployeeId,
+						StartTime = source.StartTime,
+						Duration = source.Duration,
+						CreatedBy = requesterId,
+					});
+				}
+			}
+
+			await context_.Shifts.AddRangeAsync(toCreate);
+			await context_.SaveChangesAsync();
+			await transaction.CommitAsync();
+			return outcome;
+		}
 	}
 }

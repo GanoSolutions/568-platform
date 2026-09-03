@@ -58,6 +58,13 @@ public class TestShiftController
         return db.Shifts.Any(x => x.Id == id);
     }
 
+    private Shift? GetShift(DateOnly date, Guid employeeId)
+    {
+        using IServiceScope scope = factory_.Services.CreateScope();
+        Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+        return db.Shifts.FirstOrDefault(x => x.Date == date && x.EmployeeId == employeeId);
+    }
+
     // --- GET /shift/{id} ---
 
     [Fact]
@@ -657,5 +664,227 @@ public class TestShiftController
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         ShiftExists(shiftId).Should().BeFalse();
+    }
+
+    // --- POST /shift/copy-week ---
+
+    // CopyWeekAsync reads every shift in the source week regardless of employee, and the
+    // "Integration" collection shares one database across all integration test classes.
+    // These tests therefore use dates in 2041, a year no other integration test touches
+    // (verified via grep), so no shift seeded elsewhere can leak into a source week here.
+
+    [Fact]
+    public async Task CopyWeek_ValidSingleWeek_CreatesShiftsWithDayCorrespondence()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        Guid managerId = GetUserId(ManagerEmail);
+        Guid employeeId = CreateEmployee("sa-copyweek-single@five68.com");
+        DateOnly sourceMonday = new(2041, 8, 12);
+        DateOnly sourceWednesday = new(2041, 8, 14);
+        TimeOnly start = new(9, 0);
+        TimeSpan duration = TimeSpan.FromHours(8);
+        SeedShift(employeeId, sourceWednesday, start, duration, managerId);
+
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = sourceMonday,
+            TargetStartDate = new DateOnly(2041, 8, 19),
+            TargetEndDate = new DateOnly(2041, 8, 25),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        ShiftCopyWeekResult? result = await response.Content.ReadFromJsonAsync<ShiftCopyWeekResult>(_jsonOptions);
+        result!.Created.Should().Be(1);
+        result.Overwritten.Should().Be(0);
+        result.SkippedClosedDays.Should().Be(0);
+
+        Shift? copied = GetShift(new DateOnly(2041, 8, 21), employeeId); // Wednesday of the target week
+        copied.Should().NotBeNull();
+        copied!.StartTime.Should().Be(start);
+        copied.Duration.Should().Be(duration);
+    }
+
+    [Fact]
+    public async Task CopyWeek_TwoNonContiguousPeriods_BothApplied()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        Guid managerId = GetUserId(ManagerEmail);
+        Guid employeeId = CreateEmployee("sa-copyweek-noncontiguous@five68.com");
+        DateOnly sourceMonday = new(2041, 9, 2);
+        SeedShift(employeeId, sourceMonday, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+
+        HttpResponseMessage first = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = sourceMonday,
+            TargetStartDate = new DateOnly(2041, 9, 9),
+            TargetEndDate = new DateOnly(2041, 9, 15),
+        });
+        HttpResponseMessage second = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = sourceMonday,
+            TargetStartDate = new DateOnly(2041, 9, 23),
+            TargetEndDate = new DateOnly(2041, 9, 29),
+        });
+
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+        GetShift(new DateOnly(2041, 9, 9), employeeId).Should().NotBeNull();
+        GetShift(new DateOnly(2041, 9, 23), employeeId).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task CopyWeek_ExistingShiftOnTargetDate_Overwrites()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        Guid managerId = GetUserId(ManagerEmail);
+        Guid employeeId = CreateEmployee("sa-copyweek-overwrite@five68.com");
+        DateOnly sourceMonday = new(2041, 9, 30);
+        TimeOnly newStart = new(9, 0);
+        TimeSpan newDuration = TimeSpan.FromHours(8);
+        SeedShift(employeeId, sourceMonday, newStart, newDuration, managerId);
+
+        DateOnly targetMonday = new(2041, 10, 7);
+        SeedShift(employeeId, targetMonday, new TimeOnly(14, 0), TimeSpan.FromHours(4), managerId);
+
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = sourceMonday,
+            TargetStartDate = targetMonday,
+            TargetEndDate = new DateOnly(2041, 10, 13),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        ShiftCopyWeekResult? result = await response.Content.ReadFromJsonAsync<ShiftCopyWeekResult>(_jsonOptions);
+        result!.Created.Should().Be(0);
+        result.Overwritten.Should().Be(1);
+
+        Shift? overwritten = GetShift(targetMonday, employeeId);
+        overwritten.Should().NotBeNull();
+        overwritten!.StartTime.Should().Be(newStart);
+        overwritten.Duration.Should().Be(newDuration);
+    }
+
+    [Fact]
+    public async Task CopyWeek_ClosedDayOnTargetDate_SkipsAndCounts()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        Guid managerId = GetUserId(ManagerEmail);
+        Guid employeeId = CreateEmployee("sa-copyweek-closedday@five68.com");
+        DateOnly sourceMonday = new(2041, 10, 21);
+        SeedShift(employeeId, sourceMonday, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+
+        DateOnly targetMonday = new(2041, 10, 28);
+        SeedClosedDay(targetMonday, managerId);
+
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = sourceMonday,
+            TargetStartDate = targetMonday,
+            TargetEndDate = new DateOnly(2041, 11, 3),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        ShiftCopyWeekResult? result = await response.Content.ReadFromJsonAsync<ShiftCopyWeekResult>(_jsonOptions);
+        result!.Created.Should().Be(0);
+        result.SkippedClosedDays.Should().Be(1);
+        GetShift(targetMonday, employeeId).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CopyWeek_SourceWeekNotMonday_Returns422()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = new DateOnly(2041, 11, 5), // Tuesday
+            TargetStartDate = new DateOnly(2041, 11, 11),
+            TargetEndDate = new DateOnly(2041, 11, 17),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task CopyWeek_TargetStartNotMonday_Returns422()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = new DateOnly(2041, 11, 11),
+            TargetStartDate = new DateOnly(2041, 11, 12), // Tuesday
+            TargetEndDate = new DateOnly(2041, 11, 17),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task CopyWeek_TargetEndNotSunday_Returns422()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = new DateOnly(2041, 11, 11),
+            TargetStartDate = new DateOnly(2041, 11, 18),
+            TargetEndDate = new DateOnly(2041, 11, 19), // Tuesday
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task CopyWeek_TargetEndBeforeStart_Returns422()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = new DateOnly(2041, 11, 11),
+            TargetStartDate = new DateOnly(2041, 12, 2),
+            TargetEndDate = new DateOnly(2041, 11, 17),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task CopyWeek_EmptySourceWeek_Returns422()
+    {
+        await AuthorizeAsAsync(ManagerEmail);
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = new DateOnly(2041, 11, 25),
+            TargetStartDate = new DateOnly(2041, 12, 2),
+            TargetEndDate = new DateOnly(2041, 12, 8),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task CopyWeek_EmployeeRole_Returns403()
+    {
+        await AuthorizeAsAsync(EmployeeEmail);
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = new DateOnly(2041, 8, 12),
+            TargetStartDate = new DateOnly(2041, 8, 19),
+            TargetEndDate = new DateOnly(2041, 8, 25),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task CopyWeek_Unauthenticated_Returns401()
+    {
+        client_.DefaultRequestHeaders.Authorization = null;
+        HttpResponseMessage response = await client_.PostAsJsonAsync("/shift/copy-week", new ShiftCopyWeek
+        {
+            SourceWeekMonday = new DateOnly(2041, 8, 12),
+            TargetStartDate = new DateOnly(2041, 8, 19),
+            TargetEndDate = new DateOnly(2041, 8, 25),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }
