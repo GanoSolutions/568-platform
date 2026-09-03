@@ -16,7 +16,7 @@ export default function Employees() {
 	const [deleting, setDeleting] = useState(false);
 	const [actionError, setActionError] = useState('');
 
-	const handleSave = async (data: { name: string; fiscalCode: string; email: string; phone: string; contractEnd: string }) => {
+	const handleSave = async (data: { name: string; surname: string; fiscalCode: string; email: string; phone: string; contractEnd: string }) => {
 		setActionError('');
 		try {
 			if (sheet === 'create') {
@@ -110,12 +110,12 @@ export default function Employees() {
 				{!loading && employees.length === 0 && (
 					<div className="flex flex-col items-center text-center py-16 px-8">
 						<div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-						<svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-						</svg>
-					</div>
-					<p className="text-slate-500 text-sm">Nessun dipendente in anagrafica</p>
-					<p className="text-slate-500 text-xs mt-1">Usa &quot;Crea profilo&quot; per aggiungerne uno</p>
+							<svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+							</svg>
+						</div>
+						<p className="text-slate-500 text-sm">Nessun dipendente in anagrafica</p>
+						<p className="text-slate-500 text-xs mt-1">Usa &quot;Crea profilo&quot; per aggiungerne uno</p>
 					</div>
 				)}
 
@@ -178,19 +178,21 @@ export default function Employees() {
 									)}
 								</button>
 							)}
-							<button
-								onClick={() => handleCopyLink(emp)}
-								disabled={copying === emp.id}
-								className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 py-2 rounded-xl transition disabled:opacity-70"
-							>
-								{copied === emp.id ? (
-									<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg> Copiato!</>
-								) : copying === emp.id ? (
-									<><Spinner className="w-3.5 h-3.5" /> Genero...</>
-								) : (
-									<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg> Copia link</>
-								)}
-							</button>
+							{!emp.invited && (
+								<button
+									onClick={() => handleCopyLink(emp)}
+									disabled={copying === emp.id}
+									className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 py-2 rounded-xl transition disabled:opacity-70"
+								>
+									{copied === emp.id ? (
+										<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg> Copiato!</>
+									) : copying === emp.id ? (
+										<><Spinner className="w-3.5 h-3.5" /> Genero...</>
+									) : (
+										<><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg> Copia link</>
+									)}
+								</button>
+							)}
 							<button
 								onClick={() => setSheet(emp)}
 								className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-xl transition"
@@ -202,7 +204,7 @@ export default function Employees() {
 							</button>
 							<button
 								onClick={() => setToDelete(emp)}
-							className="w-10 flex items-center justify-center text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition"
+								className="w-10 flex items-center justify-center text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition"
 							>
 								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
