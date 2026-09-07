@@ -14,6 +14,7 @@ namespace Five68.Models.DTO
 
 		/// <summary>Codice fiscale, deve essere univoco.</summary>
 		[Required]
+		[MaxLength(16)]
 		public string FiscalCode { get; set; }
 
 		/// <summary>Email, usata come username di login, deve essere univoca.</summary>
