@@ -23,6 +23,7 @@ namespace Five68.Models.DTO
 
 		/// <summary>Numero di cellulare.</summary>
 		[Required]
+		[Phone]
 		public string Phone { get; set; }
 
 		/// <summary>Data di fine contratto, opzionale.</summary>
