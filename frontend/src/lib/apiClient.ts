@@ -292,8 +292,15 @@ async function extractErrorMessage(res: Response): Promise<string> {
 	const text = await res.text().catch(() => '');
 	if (!text) return 'Request failed';
 	try {
-		const parsed = JSON.parse(text) as { message?: unknown };
+		const parsed = JSON.parse(text) as { message?: unknown; errors?: Record<string, unknown> };
 		if (typeof parsed.message === 'string' && parsed.message) return parsed.message;
+		// Validazione automatica di [ApiController] sui DataAnnotation (es. [Phone], [MaxLength]):
+		// risponde con ValidationProblemDetails ({ errors: { Campo: ["msg", ...] } }), niente .message
+		// (segnalato da Hermann in review PR #68, mostrava il JSON grezzo).
+		if (parsed.errors && typeof parsed.errors === 'object') {
+			const messages = Object.values(parsed.errors).flat().filter((m): m is string => typeof m === 'string');
+			if (messages.length) return messages.join(' ');
+		}
 	} catch {
 		// Corpo non JSON: mostriamo il testo grezzo così com'è.
 	}
