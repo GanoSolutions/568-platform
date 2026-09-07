@@ -24,7 +24,8 @@ interface CopyWeekModalProps {
 
 export default function CopyWeekModal({ currentMonday, onSubmit, onClose, submitError }: CopyWeekModalProps) {
 	const defaultStart = useMemo(() => addDays(currentMonday, 7), [currentMonday]);
-	const defaultEnd = useMemo(() => addDays(currentMonday, 28), [currentMonday]);
+	// Domenica della stessa settimana di defaultStart (+6, non +7 = lunedì dopo) — richiesto da Hermann in review PR #65.
+	const defaultEnd = useMemo(() => addDays(defaultStart, 6), [defaultStart]);
 
 	const [startDate, setStartDate] = useState(formatInputDate(defaultStart));
 	const [endDate, setEndDate] = useState(formatInputDate(defaultEnd));
