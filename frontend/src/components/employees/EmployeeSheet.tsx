@@ -34,13 +34,12 @@ function Field({ label, required, children }: { label: string; required?: boolea
 	);
 }
 
-function Input({ value, onChange, onBlur, type = 'text', placeholder, autoComplete }: { value: string; onChange: (value: string) => void; onBlur?: () => void; type?: string; placeholder?: string; autoComplete?: string }) {
+function Input({ value, onChange, type = 'text', placeholder, autoComplete }: { value: string; onChange: (value: string) => void; type?: string; placeholder?: string; autoComplete?: string }) {
 	return (
 		<input
 			type={type}
 			value={value}
 			onChange={e => onChange(e.target.value)}
-			onBlur={onBlur}
 			placeholder={placeholder}
 			autoComplete={autoComplete}
 			className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition"
@@ -85,7 +84,6 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 		contractEnd: employee.contractEnd ?? '',
 	} : EMPTY_FORM);
 	const [errors, setErrors] = useState<Record<string, string>>({});
-	const [touched, setTouched] = useState<Partial<Record<keyof EmployeeFormData, boolean>>>({});
 	const [submitting, setSubmitting] = useState(false);
 
 	useEffect(() => {
@@ -101,20 +99,13 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 		});
 	}, [employee]);
 
-	// onChange: aggiorna il valore e, se il campo è già stato "toccato" (blur o
-	// tentativo di submit precedente), ne ricalcola subito l'errore — validazione
-	// dal vivo mentre si digita, non solo al salvataggio (richiesta da Hermann).
+	// onChange: aggiorna il valore e ricalcola subito l'errore del campo, così il
+	// messaggio compare/sparisce dal vivo mentre si digita (richiesto da Hermann
+	// in review PR #68), non solo al blur o al salvataggio.
 	const set = (field: keyof EmployeeFormData) => (value: string) => {
 		const next = { ...form, [field]: value };
 		setForm(next);
-		if (touched[field]) {
-			setErrors(prev => ({ ...prev, [field]: validateField(field, next) }));
-		}
-	};
-
-	const touch = (field: keyof EmployeeFormData) => () => {
-		setTouched(prev => ({ ...prev, [field]: true }));
-		setErrors(prev => ({ ...prev, [field]: validateField(field, form) }));
+		setErrors(prev => ({ ...prev, [field]: validateField(field, next) }));
 	};
 
 	const validate = () => {
@@ -125,7 +116,6 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 			if (msg) e[field] = msg;
 		}
 		setErrors(e);
-		setTouched(Object.fromEntries(fields.map(f => [f, true])));
 		return Object.keys(e).length === 0;
 	};
 
@@ -164,27 +154,27 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 
 					<div className="flex-1 min-h-0 overflow-y-auto px-5 space-y-4 pb-2">
 						<Field label="Nome" required>
-							<Input value={form.name} onChange={set('name')} onBlur={touch('name')} placeholder="Mario" autoComplete="given-name" />
+							<Input value={form.name} onChange={set('name')} placeholder="Mario" autoComplete="given-name" />
 							{errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
 						</Field>
 
 						<Field label="Cognome" required>
-							<Input value={form.surname} onChange={set('surname')} onBlur={touch('surname')} placeholder="Rossi" autoComplete="family-name" />
+							<Input value={form.surname} onChange={set('surname')} placeholder="Rossi" autoComplete="family-name" />
 							{errors.surname && <p className="text-red-400 text-xs mt-1">{errors.surname}</p>}
 						</Field>
 
 						<Field label="Codice fiscale" required>
-							<Input value={form.fiscalCode} onChange={set('fiscalCode')} onBlur={touch('fiscalCode')} placeholder="RSSMRA80A01H501Z" autoComplete="off" />
+							<Input value={form.fiscalCode} onChange={set('fiscalCode')} placeholder="RSSMRA80A01H501Z" autoComplete="off" />
 							{errors.fiscalCode && <p className="text-red-400 text-xs mt-1">{errors.fiscalCode}</p>}
 						</Field>
 
 						<Field label="Email" required>
-							<Input value={form.email} onChange={set('email')} onBlur={touch('email')} type="email" placeholder="mario@email.com" autoComplete="email" />
+							<Input value={form.email} onChange={set('email')} type="email" placeholder="mario@email.com" autoComplete="email" />
 							{errors.email && <p className="text-red-400 text-xs mt-1">{errors.email}</p>}
 						</Field>
 
 						<Field label="Numero di cellulare" required>
-							<Input value={form.phone} onChange={set('phone')} onBlur={touch('phone')} type="tel" placeholder="3331234567" autoComplete="tel" />
+							<Input value={form.phone} onChange={set('phone')} type="tel" placeholder="3331234567" autoComplete="tel" />
 							{errors.phone && <p className="text-red-400 text-xs mt-1">{errors.phone}</p>}
 						</Field>
 
