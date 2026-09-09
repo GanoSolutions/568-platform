@@ -1,6 +1,6 @@
 // useCalendar.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { settingsApi, shiftApi, type ShiftDTO } from '@/lib/apiClient';
+import { settingsApi, shiftApi, type ShiftCopyWeekResult, type ShiftDTO } from '@/lib/apiClient';
 import { getAppHubConnection } from '@/lib/realtime';
 import { computeDuration, toBackendTime, toDisplayRange } from '@/lib/shiftTime';
 import type { ShiftData, ShiftEmployee } from '@/types';
@@ -14,12 +14,6 @@ function getMondayOfWeek(date: Date): Date {
 	d.setDate(d.getDate() + diff);
 	d.setHours(0, 0, 0, 0);
 	return d;
-}
-
-function addDays(date: Date, amount: number): Date {
-	const next = new Date(date);
-	next.setDate(next.getDate() + amount);
-	return next;
 }
 
 export function formatDateKey(date: Date): string {
@@ -239,55 +233,20 @@ export function useCalendar() {
 
 	/**
 	 * Copia i turni della settimana visibile su ogni settimana nell'intervallo
-	 * scelto. Un fallimento su un singolo turno (es. 422 perché il dipendente è
-	 * già assegnato quel giorno) non blocca gli altri: viene raccolto e segnalato
-	 * in coda dopo aver comunque applicato tutto il resto.
+	 * scelto. L'operazione (lettura della settimana sorgente, validazione,
+	 * sovrascrittura) è tutta lato backend (`POST /shift/copy-week`, atomica);
+	 * qui si passa solo il lunedì visualizzato come sorgente e si ricarica la
+	 * settimana corrente dopo, per riflettere eventuali turni sovrascritti.
 	 */
-	const copyWeek = async ({ startDate, endDate }: { startDate: string; endDate: string }) => {
-		const sourceWeek = weekDays.map((day) => ({
-			date: new Date(day),
-			shift: getShiftForDay(day),
-		}));
-
-		const startMonday = getMondayOfWeek(new Date(startDate));
-		const endMonday = getMondayOfWeek(new Date(endDate));
-
-		if (endMonday < startMonday) {
-			throw new Error('Periodo non valido per la copia settimana');
-		}
-
+	const copyWeek = async ({ startDate, endDate }: { startDate: string; endDate: string }): Promise<ShiftCopyWeekResult> => {
 		setError('');
-		const failures: string[] = [];
-
-		for (let monday = new Date(startMonday); monday <= endMonday; monday = addDays(monday, 7)) {
-			for (let index = 0; index < sourceWeek.length; index += 1) {
-				const sourceDay = sourceWeek[index];
-				const targetDate = addDays(monday, index);
-				const targetKey = formatDateKey(targetDate);
-
-				if (targetKey === formatDateKey(sourceDay.date)) continue;
-				if (!sourceDay.shift || sourceDay.shift.closed) continue;
-
-				for (const employee of sourceDay.shift.employees) {
-					try {
-						await shiftApi.create({
-							employeeId: employee.id,
-							date: targetKey,
-							startTime: toBackendTime(employee.startTime),
-							duration: computeDuration(employee.startTime, employee.endTime),
-						});
-					} catch (copyError) {
-						failures.push(`${targetKey}: ${copyError instanceof Error ? copyError.message : 'errore sconosciuto'}`);
-					}
-				}
-			}
-		}
-
+		const result = await shiftApi.copyWeek({
+			sourceWeekMonday: formatDateKey(currentMonday),
+			targetStartDate: startDate,
+			targetEndDate: endDate,
+		});
 		await reloadCalendar();
-
-		if (failures.length > 0) {
-			throw new Error(`Alcuni turni non sono stati copiati:\n${failures.join('\n')}`);
-		}
+		return result;
 	};
 
 	return {
