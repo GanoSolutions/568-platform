@@ -14,14 +14,14 @@ namespace Five68.Facades
 
 		public async Task UpsertUserRefreshTokens(UserRefreshTokens refreshTokens)
 		{
-			await DeleteUserRefreshTokens(refreshTokens.Email);
+			await DeleteUserRefreshTokens(refreshTokens.UserId);
 			db_.RefreshTokens.Add(refreshTokens);
 			await db_.SaveChangesAsync();
 		}
 
-		public async Task<UserRefreshTokens?> ConsumeRefreshToken(string email)
+		public async Task<UserRefreshTokens?> ConsumeRefreshToken(Guid userId)
 		{
-			UserRefreshTokens token = await db_.RefreshTokens.FirstOrDefaultAsync(x => x.Email == email);
+			UserRefreshTokens token = await db_.RefreshTokens.FirstOrDefaultAsync(x => x.UserId == userId);
 			if (token is null)
 			{
 				return null;
@@ -32,10 +32,10 @@ namespace Five68.Facades
 			return token;
 		}
 
-		public async Task DeleteUserRefreshTokens(string email)
+		public async Task DeleteUserRefreshTokens(Guid userId)
 		{
 			await db_.RefreshTokens
-				.Where(x => x.Email == email)
+				.Where(x => x.UserId == userId)
 				.ExecuteDeleteAsync();
 		}
 	}

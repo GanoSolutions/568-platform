@@ -25,9 +25,6 @@ namespace Five68.Controllers
 		public async Task<IActionResult> Login(UserLogin userData)
 		{
 			Tokens token = await authService_.Login(userData);
-
-			logger_.LogInformation("User " + userData.Email + " has logged in");
-
 			return Ok(token);
 		}
 
@@ -45,13 +42,14 @@ namespace Five68.Controllers
 		[HttpPost("logout")]
 		public async Task<IActionResult> Logout()
 		{
-			string? email = User.FindFirst(ClaimTypes.Email)?.Value;
-			if (email is null)
+			string? userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+			if (userId is null || !Guid.TryParse(userId, out Guid id))
 				return Unauthorized();
 
-			logger_?.LogInformation($"User {email} required logout");
+			string? email = User.FindFirst(ClaimTypes.Email)?.Value;
+			logger_?.LogInformation($"User {id} ({email}) required logout");
 
-			await authService_.Logout(email);
+			await authService_.Logout(id);
 			return Ok();
 		}
 	}

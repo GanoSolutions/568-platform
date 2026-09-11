@@ -7,6 +7,8 @@ export interface Employee {
 }
 
 export interface EmployeeDetail extends Employee {
+  /** Solo cognome — `name` resta il nome completo per la visualizzazione. */
+  surname: string
   fiscalCode: string
   phone: string
   contractEnd: string

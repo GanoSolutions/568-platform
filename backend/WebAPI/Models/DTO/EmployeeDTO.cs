@@ -2,6 +2,7 @@ namespace Five68.Models.DTO
 {
 	public class EmployeeDTO
 	{
+		public Guid Id { get; set; }
 		public string Name { get; set; }
 		public string Surname { get; set; }
 		public string FiscalCode { get; set; }
@@ -18,6 +19,7 @@ namespace Five68.Models.DTO
 
 			return new EmployeeDTO
 			{
+				Id = emp.UserId,
 				Name = emp.Name,
 				Surname = emp.Surname,
 				FiscalCode = emp.FiscalCode,

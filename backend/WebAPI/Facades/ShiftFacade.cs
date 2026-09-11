@@ -61,6 +61,13 @@ namespace Five68.Facades
 			return await context_.ClosedDays.AnyAsync(x => x.Date == date);
 		}
 
+		internal async Task DeleteFutureAssignmentsForEmployeeAsync(Guid employeeId, DateOnly fromDate)
+		{
+			await context_.Shifts
+				.Where(x => x.EmployeeId == employeeId && x.Date >= fromDate)
+				.ExecuteDeleteAsync();
+		}
+
 		internal async Task<ShiftCopyWeekResult> CopyWeekAsync(DateOnly sourceWeekMonday, DateOnly targetStartDate, DateOnly targetEndDate, Guid requesterId)
 		{
 			List<Shift> sourceShifts = await context_.Shifts

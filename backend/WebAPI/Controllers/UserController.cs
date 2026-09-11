@@ -56,28 +56,6 @@ namespace Five68.Controllers
 		}
 
 		/// <summary>
-		/// Creates a new user account. The caller can only assign roles strictly below their own.
-		/// The created user is set to Pending status until they accept the invite.
-		/// </summary>
-		/// <response code="201">User created successfully.</response>
-		/// <response code="400">Validation failed (missing fields or weak password).</response>
-		/// <response code="401">Caller is not authenticated.</response>
-		/// <response code="403">Caller attempted to create a user with equal or higher role.</response>
-		/// <response code="422">Email is already in use.</response>
-		[Authorize]
-		[HttpPost("signup")]
-		public async Task<IActionResult> Signup([FromBody] UserRegister model)
-		{
-			string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-			if (!Guid.TryParse(requesterId, out Guid id))
-			{
-				return Unauthorized();
-			}
-			await userService_.CreateUser(model, id);
-			return Created();
-		}
-
-		/// <summary>
 		/// Generates an invite token for a user and returns it. The token expires after 7 days.
 		/// Can be called again to regenerate an expired token.
 		/// </summary>
@@ -95,7 +73,7 @@ namespace Five68.Controllers
 				return Unauthorized();
 			}
 
-			string token = await userService_.GenerateInvite(id, reqGuid);
+			string token = await userService_.GenerateInvite(id, reqGuid, sendEmail: true);
 			return Ok(new { inviteToken = token });
 		}
 
@@ -131,6 +109,50 @@ namespace Five68.Controllers
 				return Unauthorized();
 			await userService_.ChangePassword(id, model);
 			return NoContent();
+		}
+
+		/// <summary>
+		/// Disabilita un account (soft-delete). Rimuove il titolare dai turni futuri (non da quelli
+		/// passati). Solo manager/admin.
+		/// </summary>
+		/// <param name="id">L'ID dell'utente da disabilitare.</param>
+		/// <response code="204">Account disabilitato.</response>
+		/// <response code="401">Il chiamante non è autenticato.</response>
+		/// <response code="403">Il chiamante non è manager o admin.</response>
+		/// <response code="404">Utente non trovato.</response>
+		[Authorize]
+		[HttpDelete("{id:guid}")]
+		public async Task<IActionResult> Delete(Guid id)
+		{
+			string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+			if (!Guid.TryParse(requesterId, out Guid reqGuid))
+			{
+				return Unauthorized();
+			}
+
+			await userService_.Delete(id, reqGuid);
+			return NoContent();
+		}
+
+		/// <summary>
+		/// Rigenera l'invito senza inviare l'email, restituendo solo il token/link. Solo manager/admin.
+		/// </summary>
+		/// <param name="id">L'ID dell'utente.</param>
+		/// <response code="200">Token generato. Il corpo contiene <c>inviteToken</c>.</response>
+		/// <response code="401">Il chiamante non è autenticato.</response>
+		/// <response code="404">Utente non trovato.</response>
+		[Authorize]
+		[HttpGet("{id:guid}/invite-link")]
+		public async Task<IActionResult> InviteLink(Guid id)
+		{
+			string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+			if (!Guid.TryParse(requesterId, out Guid reqGuid))
+			{
+				return Unauthorized();
+			}
+
+			string token = await userService_.GenerateInvite(id, reqGuid, sendEmail: false);
+			return Ok(new { inviteToken = token });
 		}
 	}
 }
