@@ -119,6 +119,31 @@ namespace Five68.Controllers
 			return NoContent();
 		}
 
+		/// <summary>
+		/// Copies every shift of the source week onto each week within the target period,
+		/// preserving weekday correspondence (Monday maps to Monday, etc.). Shifts already
+		/// present on target dates are overwritten. Only managers/admins can perform this action.
+		/// </summary>
+		/// <param name="model">The source week to copy from, and the target period to copy onto.</param>
+		/// <response code="200">Copy completed. Returns a summary of created, overwritten and skipped shifts.</response>
+		/// <response code="401">Caller is not authenticated.</response>
+		/// <response code="403">Caller is not a manager or admin.</response>
+		/// <response code="422">
+		/// The source week does not start on a Monday, the target period does not start on a Monday or end on a
+		/// Sunday, the target end date precedes the start date, or the source week has no shifts to copy.
+		/// </response>
+		[HttpPost("copy-week")]
+		public async Task<IActionResult> CopyWeek([FromBody] ShiftCopyWeek model)
+		{
+			Guid requesterId = GetRequesterId();
+			if (requesterId == Guid.Empty)
+			{
+				return Unauthorized();
+			}
+
+			return Ok(await _shiftService.CopyWeek(model, requesterId));
+		}
+
 		private Guid GetRequesterId()
 		{
 			string requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

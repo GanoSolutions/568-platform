@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useCalendar, getWeekNumber } from '@/hooks/useCalendar';
 import { useEmployees } from '@/hooks/useEmployees';
-import { showErrorToast } from '@/lib/toast';
+import { showErrorToast, showSuccessToast } from '@/lib/toast';
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import CopyWeekModal from '@/components/modals/CopyWeekModal';
 import ShiftModal from '@/components/modals/ShiftModal';
@@ -93,8 +93,10 @@ export default function Calendar() {
 	const handleCopyWeek = async (payload: { startDate: string; endDate: string }) => {
 		setActionError('');
 		try {
-			await copyWeek(payload);
+			const result = await copyWeek(payload);
 			closeCopyWeekModal();
+			const skippedLabel = result.skippedClosedDays > 0 ? `, ${result.skippedClosedDays} saltati (chiusura)` : '';
+			showSuccessToast(`Copia completata: ${result.created} creati, ${result.overwritten} sovrascritti${skippedLabel}`);
 		} catch (copyError) {
 			setActionError((copyError as Error).message || 'Copia settimana non riuscita');
 			throw copyError;
