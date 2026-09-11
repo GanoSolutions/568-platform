@@ -54,6 +54,11 @@ namespace Five68.Services
 				throw new EntityException("Codice fiscale già in uso");
 			}
 
+			if (model.ContractEnd <= DateOnly.FromDateTime(DateTime.UtcNow))
+			{
+				throw new EntityException("La data di fine contratto deve essere nel futuro");
+			}
+
 			string color = await NextAvailableColor();
 			User user = null;
 			Employee employee = null;
@@ -98,6 +103,11 @@ namespace Five68.Services
 			if (existingByFiscalCode is not null && existingByFiscalCode.UserId != id)
 			{
 				throw new EntityException("Codice fiscale già in uso");
+			}
+
+			if (model.ContractEnd <= DateOnly.FromDateTime(DateTime.UtcNow))
+			{
+				throw new EntityException("La data di fine contratto deve essere nel futuro");
 			}
 
 			user.Email = model.Email;

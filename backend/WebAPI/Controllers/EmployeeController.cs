@@ -36,7 +36,7 @@ namespace Five68.Controllers
 		/// <response code="201">Dipendente creato.</response>
 		/// <response code="401">Il chiamante non è autenticato.</response>
 		/// <response code="403">Il chiamante non è manager o admin.</response>
-		/// <response code="422">Email o codice fiscale già in uso.</response>
+		/// <response code="422">Email o codice fiscale già in uso, oppure data di fine contratto non nel futuro.</response>
 		[HttpPost("")]
 		public async Task<IActionResult> Create([FromBody] EmployeeCreate model)
 		{
@@ -56,7 +56,7 @@ namespace Five68.Controllers
 		/// <response code="401">Il chiamante non è autenticato.</response>
 		/// <response code="403">Il chiamante non è manager o admin.</response>
 		/// <response code="404">Dipendente non trovato.</response>
-		/// <response code="422">Email o codice fiscale già in uso.</response>
+		/// <response code="422">Email o codice fiscale già in uso, oppure data di fine contratto non nel futuro.</response>
 		[HttpPut("{id:guid}")]
 		public async Task<IActionResult> Update(Guid id, [FromBody] EmployeeCreate model)
 		{
