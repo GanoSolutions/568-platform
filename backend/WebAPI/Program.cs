@@ -180,6 +180,7 @@ namespace Five68
 			services.AddScoped<ShiftFacade>();
 			services.AddScoped<SettingsFacade>();
 			services.AddScoped<SwapRequestFacade>();
+			services.AddScoped<PushSubscriptionFacade>();
 
 			// Services
 			services.AddScoped<AuthService>();
@@ -192,6 +193,13 @@ namespace Five68
 			services.AddScoped<ISwapRequestNotificationService>(sp => sp.GetRequiredService<SignalRNotificationService>());
 			services.AddScoped<IShiftNotificationService>(sp => sp.GetRequiredService<SignalRNotificationService>());
 			services.AddScoped<IInviteService, NoOpInviteService>();
+			services.AddScoped<PushSubscriptionService>();
+			services.AddScoped<WebPushNotificationService>();
+			services.AddScoped<IWebPushNotificationService>(sp => sp.GetRequiredService<WebPushNotificationService>());
+
+			services.AddSingleton<PushDispatchQueue>();
+			services.AddHostedService<PushDispatcherBackgroundService>();
+
 			// Utils
 			services.AddSingleton<UserUtils>();
 

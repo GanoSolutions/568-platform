@@ -9,6 +9,7 @@ namespace Five68
 		public CryptoSettings Crypto { get; set; } = new();
 		public PasswordRequirements PasswordRequirements { get; set; } = new();
 		public JWTSettings JWTSettings { get; set; } = new();
+		public WebPushSettings WebPush { get; set; } = new();
 	}
 
 	public class CryptoSettings
@@ -31,5 +32,13 @@ namespace Five68
 		public bool Enabled { get; init; }
 		public string BotToken { get; init; } = string.Empty;
 		public List<string> ChatIds { get; init; } = [];
+	}
+
+	public class WebPushSettings
+	{
+		public bool Enabled { get; init; }
+		public string PublicKey { get; init; } = string.Empty;
+		public string PrivateKey { get; init; } = string.Empty;
+		public string Subject { get; init; } = string.Empty;
 	}
 }

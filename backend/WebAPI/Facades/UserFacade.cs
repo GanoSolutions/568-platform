@@ -55,5 +55,12 @@ namespace Five68.Facades
 			return await context_.Users.CountAsync();
 		}
 
+		internal async Task<IEnumerable<User>> GetByRolesAsync(params UserRole[] roles)
+		{
+			return await context_.Users
+				.AsNoTracking()
+				.Where(x => roles.Contains(x.Role))
+				.ToListAsync();
+		}
 	}
 }
