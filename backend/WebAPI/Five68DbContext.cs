@@ -103,7 +103,7 @@ namespace Five68
 				e.ToTable("t_refresh_tokens");
 				e.HasKey(x => x.Id);
 				e.Property(x => x.Id).ValueGeneratedOnAdd();
-				e.HasIndex(x => x.Email);
+				e.HasIndex(x => x.UserId);
 			});
 
 			modelBuilder.Entity<PushSubscription>(e =>

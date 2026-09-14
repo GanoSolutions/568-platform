@@ -180,6 +180,7 @@ namespace Five68
 			services.AddScoped<ShiftFacade>();
 			services.AddScoped<SettingsFacade>();
 			services.AddScoped<SwapRequestFacade>();
+			services.AddScoped<TransactionFacade>();
 			services.AddScoped<PushSubscriptionFacade>();
 
 			// Services
@@ -187,6 +188,7 @@ namespace Five68
 			services.AddSingleton<JwtService>();
 			services.AddScoped<UserService>();
 			services.AddScoped<ShiftService>();
+			services.AddScoped<EmployeeService>();
 			services.AddScoped<SettingsService>();
 			services.AddScoped<SwapRequestService>();
 			services.AddScoped<SignalRNotificationService>();
@@ -202,6 +204,7 @@ namespace Five68
 
 			// Utils
 			services.AddSingleton<UserUtils>();
+			services.AddScoped<AuthUtils>();
 
 			// Password Validator
 			services.AddSingleton(sp =>
