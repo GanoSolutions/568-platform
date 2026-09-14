@@ -141,11 +141,11 @@ export default function EmployeeSheet({ employee, onSave, onClose, saveError }: 
 		<Sheet open onOpenChange={onClose}>
 			{/* Solo il corpo scrolla (flex-1 min-h-0 overflow-y-auto): header, X e
 			    footer restano sempre visibili anche a tastiera aperta / form lungo
-			    (segnalato da Hermann in review). Larghezza limitata via wrapper
-			    interno (mx-auto) perché il side=bottom del componente Sheet è
-			    sempre full-width. */}
-			<SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] p-0">
-				<div className="w-full max-w-md mx-auto flex flex-col flex-1 min-h-0">
+			    (segnalato da Hermann in review). Il side=bottom del componente Sheet
+			    è inset-x-0 (full-width): w-full + max-w-md + mx-auto sul popup lo
+			    restringono e lo centrano, così anche la X resta dentro al pannello. */}
+			<SheetContent side="bottom" className="w-full max-w-md mx-auto sm:border-x rounded-t-2xl max-h-[92vh] p-0">
+				<div className="w-full flex flex-col flex-1 min-h-0">
 					<SheetHeader className="px-5 pt-6 pb-2 shrink-0">
 						<SheetTitle className="text-slate-800">
 							{isEdit ? 'Modifica dipendente' : 'Nuovo dipendente'}
