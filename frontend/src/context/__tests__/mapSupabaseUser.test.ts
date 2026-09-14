@@ -10,6 +10,7 @@ const baseDTO: UserDTO = {
 	role: 2,      // Employee
 	status: 2,    // Active
 	employee: {
+		id: 'a1b2c3d4-0000-0000-0000-000000000001',
 		name: 'Mario',
 		surname: 'Rossi',
 		fiscalCode: 'RSSMRA80A01H501Z',

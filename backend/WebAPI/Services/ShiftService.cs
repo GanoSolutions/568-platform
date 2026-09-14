@@ -2,6 +2,7 @@ using Five68.Exceptions;
 using Five68.Facades;
 using Five68.Models;
 using Five68.Models.DTO;
+using Five68.Utils;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Five68.Services
@@ -12,6 +13,7 @@ namespace Five68.Services
 		private readonly UserFacade _userFacade;
 		private readonly EmployeeFacade _employeeFacade;
 		private readonly IShiftNotificationService _notificationService;
+		private readonly AuthUtils _authUtils;
 		private readonly ILogger _logger;
 
 		public ShiftService(
@@ -19,12 +21,14 @@ namespace Five68.Services
 			UserFacade userFacade,
 			EmployeeFacade employeeFacade,
 			IShiftNotificationService notificationService,
+			AuthUtils authUtils,
 			ILogger<ShiftService> logger)
 		{
 			_shiftFacade = shiftFacade;
 			_userFacade = userFacade;
 			_employeeFacade = employeeFacade;
 			_notificationService = notificationService;
+			_authUtils = authUtils;
 			_logger = logger;
 		}
 
@@ -45,7 +49,7 @@ namespace Five68.Services
 
 		public async Task<ShiftDTO> Create(ShiftCreate model, Guid requesterId)
 		{
-			User requester = await RequireManagerOrAdmin(requesterId);
+			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
 
 			Employee employee = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Dipendente non trovato");
 			if (await _shiftFacade.IsClosedDayAsync(model.Date))
@@ -70,14 +74,14 @@ namespace Five68.Services
 			});
 
 			await _notificationService.NotifyShiftChangedAsync(created.Date);
-			_logger.LogInformation($"User {requester.Email} created a {created.Duration} hours shift on {created.Date} for employee {created.EmployeeId} starting at {created.StartTime}");
+			_logger.LogInformation($"User {requester.Id} ({requester.Email}) created a {created.Duration} hours shift on {created.Date} for employee {created.EmployeeId} starting at {created.StartTime}");
 
 			return ShiftDTO.FromShift(created);
 		}
 
 		public async Task<ShiftDTO> Update(Guid id, ShiftUpdate model, Guid requesterId)
 		{
-			User requester = await RequireManagerOrAdmin(requesterId);
+			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
 
 			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
 			if (await _shiftFacade.IsClosedDayAsync(shift.Date))
@@ -91,14 +95,14 @@ namespace Five68.Services
 			Shift updated = await _shiftFacade.UpdateAsync(shift);
 
 			await _notificationService.NotifyShiftChangedAsync(updated.Date);
-			_logger.LogInformation($"User {requester.Email} updated shift on {updated.Date} to a {updated.Duration} hours shift starting at {updated.StartTime}");
+			_logger.LogInformation($"User {requester.Id} ({requester.Email}) updated shift on {updated.Date} to a {updated.Duration} hours shift starting at {updated.StartTime}");
 
 			return ShiftDTO.FromShift(updated);
 		}
 
 		public async Task Delete(Guid id, Guid requesterId)
 		{
-			User requester = await RequireManagerOrAdmin(requesterId);
+			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
 
 			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
 
@@ -107,16 +111,15 @@ namespace Five68.Services
 			{
 				throw new EntityException("Non è possibile eliminare un turno passato");
 			}
-
 			await _shiftFacade.DeleteAsync(shift);
 
 			await _notificationService.NotifyShiftChangedAsync(shift.Date);
-			_logger.LogInformation($"User {requester.Email} deleted shift on {shift.Date} - {shift.StartTime}");
+			_logger.LogInformation($"User {requester.Id} ({requester.Email}) deleted shift on {shift.Date} - {shift.StartTime}");
 		}
 
-		public async Task<ShiftCopyWeekResult> CopyWeek(ShiftCopyWeek model, Guid requesterId)
+				public async Task<ShiftCopyWeekResult> CopyWeek(ShiftCopyWeek model, Guid requesterId)
 		{
-			User requester = await RequireManagerOrAdmin(requesterId);
+			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
 
 			if (model.SourceWeekMonday.DayOfWeek != DayOfWeek.Monday)
 			{
@@ -145,17 +148,6 @@ namespace Five68.Services
 			_logger.LogInformation($"User {requester.Email} copied week of {model.SourceWeekMonday} onto {model.TargetStartDate}-{model.TargetEndDate}: {result.Created} created, {result.Overwritten} overwritten, {result.SkippedClosedDays} skipped");
 
 			return result;
-		}
-
-		private async Task<User> RequireManagerOrAdmin(Guid requesterId)
-		{
-			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
-			if (requester.Role == UserRole.Employee)
-			{
-				throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
-			}
-
-			return requester;
 		}
 	}
 }

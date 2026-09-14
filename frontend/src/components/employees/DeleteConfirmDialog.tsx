@@ -18,10 +18,10 @@ export default function DeleteConfirmDialog({ employee, deleting, onConfirm, onC
 					<DialogTitle className="text-slate-800">Elimina dipendente</DialogTitle>
 				</DialogHeader>
 				<div className="px-5 pb-5">
-					<p className="text-slate-500 text-sm">
-						Sei sicuro di voler eliminare <span className="font-semibold text-slate-700">{employee.name}</span>?
+					<p className="text-red-600 font-semibold text-sm">
+						Sei sicuro di voler eliminare <span className="font-bold">{employee.name}</span>?
 					</p>
-					<p className="text-slate-400 text-xs mt-2">
+					<p className="text-red-600 font-semibold text-xs mt-2">
 						Il nominativo verrà rimosso da tutti i turni futuri. I turni passati rimarranno invariati.
 					</p>
 				</div>

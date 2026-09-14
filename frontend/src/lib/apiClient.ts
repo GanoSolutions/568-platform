@@ -48,6 +48,7 @@ export interface Tokens {
 
 /** Mirror of the C# EmployeeDTO — dati anagrafici del dipendente. */
 export interface EmployeeDTO {
+	id: string;
 	name: string;
 	surname: string;
 	fiscalCode: string;
@@ -67,11 +68,14 @@ export interface UserDTO {
 	createdAt: string;
 }
 
-export interface UserRegisterPayload {
+/** Mirror of the C# EmployeeCreate — usato sia per la creazione che per l'update (stesso body). */
+export interface EmployeeCreatePayload {
+	name: string;
+	surname: string;
+	fiscalCode: string;
 	email: string;
-	fullName: string;
-	password: string;
-	role: UserRoleCode;
+	phone: string;
+	contractEnd: string | null;
 }
 
 /** Mirror of the C# ShiftDTO. `startTime` is "HH:mm:ss", `duration` is a .NET
@@ -302,8 +306,15 @@ async function extractErrorMessage(res: Response): Promise<string> {
 	const text = await res.text().catch(() => '');
 	if (!text) return 'Request failed';
 	try {
-		const parsed = JSON.parse(text) as { message?: unknown };
+		const parsed = JSON.parse(text) as { message?: unknown; errors?: Record<string, unknown> };
 		if (typeof parsed.message === 'string' && parsed.message) return parsed.message;
+		// Validazione automatica di [ApiController] sui DataAnnotation (es. [Phone], [MaxLength]):
+		// risponde con ValidationProblemDetails ({ errors: { Campo: ["msg", ...] } }), niente .message
+		// (segnalato da Hermann in review PR #68, mostrava il JSON grezzo).
+		if (parsed.errors && typeof parsed.errors === 'object') {
+			const messages = Object.values(parsed.errors).flat().filter((m): m is string => typeof m === 'string');
+			if (messages.length) return messages.join(' ');
+		}
 	} catch {
 		// Corpo non JSON: mostriamo il testo grezzo così com'è.
 	}
@@ -352,15 +363,26 @@ export const userApi = {
 
 	getAll: () => api.get<UserDTO[]>('/user'),
 
-	signup: (data: UserRegisterPayload) => api.post<void>('/user/signup', data),
-
 	invite: (id: string) => api.post<{ inviteToken: string }>(`/user/${id}/invite`),
+
+	/** Rigenera l'invito senza mandare l'email — solo il token, per costruire il link a mano. */
+	inviteLink: (id: string) => api.get<{ inviteToken: string }>(`/user/${id}/invite-link`),
 
 	acceptInvite: (token: string, password: string) =>
 		api.post<void>('/user/invite/accept', { token, password }),
 
 	changePassword: (payload: ChangePasswordPayload) =>
 		api.post<void>('/user/password', payload),
+
+	/** Soft-delete: Status=Disabled, rimuove dai turni futuri, revoca la sessione. */
+	delete: (id: string) => api.del<void>(`/user/${id}`),
+};
+
+export const employeeApi = {
+	create: (payload: EmployeeCreatePayload) => api.post<EmployeeDTO>('/employee', payload),
+
+	/** Stesso body della create — l'email vive su User ma si aggiorna da qui. */
+	update: (id: string, payload: EmployeeCreatePayload) => api.put<EmployeeDTO>(`/employee/${id}`, payload),
 };
 
 export const shiftApi = {
