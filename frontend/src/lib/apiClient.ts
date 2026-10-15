@@ -437,6 +437,22 @@ export interface SwapRequestCreatePayload {
 	targetEmployeeIds: string[];
 }
 
+/** Mirror della PushSubscriptionCreate del backend C#. */
+export interface PushSubscriptionPayload {
+	endpoint: string;
+	p256dh: string;
+	auth: string;
+	userAgent?: string;
+}
+
+export const pushApi = {
+	subscribe: (body: PushSubscriptionPayload) => api.post<void>('/push/subscribe', body),
+
+	unsubscribe: (endpoint: string) => api.post<void>('/push/unsubscribe', { endpoint }),
+
+	status: () => api.get<{ active: boolean }>('/push/status'),
+};
+
 export const swapRequestApi = {
 	getPending: () => api.get<SwapRequestDTO[]>('/swaprequest/pending'),
 

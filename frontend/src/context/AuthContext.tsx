@@ -107,7 +107,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	};
 
 	const logout = async () => {
-		window.dispatchEvent(new Event('app:logout'));
+		// app:logout porta nel detail un array `pending`: chi deve fare cleanup
+		// autenticato prima che i token sparicano (es. usePushNotifications, che
+		// disiscrive la subscription push) ci infila la sua promise. La aspettiamo
+		// qui, con un timeout breve, prima di cancellare i token — altrimenti quella
+		// chiamata rischia di partire quando i token sono già azzerati (segnalato
+		// da Hermann nella guida frontend della PR #71).
+		const pending: Promise<unknown>[] = [];
+		window.dispatchEvent(new CustomEvent('app:logout', { detail: { pending } }));
+		await Promise.race([
+			Promise.allSettled(pending),
+			new Promise(resolve => setTimeout(resolve, 1500)),
+		]);
+
 		try {
 			await authApi.logout();
 		} catch { /* tokens vengono puliti comunque */ }
