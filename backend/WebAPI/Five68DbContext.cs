@@ -17,6 +17,7 @@ namespace Five68
 		public DbSet<Shift> Shifts => Set<Shift>();
 		public DbSet<SwapRequest> SwapRequests => Set<SwapRequest>();
 		public DbSet<UserRefreshTokens> RefreshTokens => Set<UserRefreshTokens>();
+		public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
 			base.OnModelCreating(modelBuilder);
@@ -104,7 +105,20 @@ namespace Five68
 				e.Property(x => x.Id).ValueGeneratedOnAdd();
 				e.HasIndex(x => x.UserId);
 			});
-		}
 
+			modelBuilder.Entity<PushSubscription>(e =>
+			{
+				e.ToTable("t_push_subscriptions");
+				e.HasKey(x => x.Id);
+				e.Property(x => x.Id).ValueGeneratedNever();
+				e.HasIndex(x => x.Endpoint).IsUnique();
+				e.HasIndex(x => x.UserId);
+
+				e.HasOne<User>()
+					.WithMany()
+					.HasForeignKey(x => x.UserId)
+					.OnDelete(DeleteBehavior.Cascade);
+			});
+		}
 	}
 }
