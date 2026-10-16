@@ -1,7 +1,6 @@
 # Stage 1: build React app with Vite
 # VITE_API_URL and VITE_VAPID_PUBLIC_KEY are baked into the JS bundle at build time
 ARG VITE_API_URL=http://localhost:8080
-ARG VITE_VAPID_PUBLIC_KEY=your-vapid-public-key-here
 
 FROM node:22-alpine AS build
 ARG VITE_API_URL
