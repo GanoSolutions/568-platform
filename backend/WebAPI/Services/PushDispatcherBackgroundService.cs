@@ -1,4 +1,5 @@
 using Five68.Facades;
+using Five68.Utils;
 using Microsoft.Extensions.Options;
 using System.Net;
 using WebPush;
@@ -11,7 +12,7 @@ namespace Five68.Services
 		private readonly IServiceScopeFactory _scopeFactory;
 		private readonly WebPushSettings _settings;
 		private readonly ILogger _logger;
-		private readonly WebPushClient _client = new();
+		private readonly WebPushClient _client = new(new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }));
 
 		public PushDispatcherBackgroundService(
 			PushDispatchQueue queue,
@@ -43,7 +44,7 @@ namespace Five68.Services
 		{
 			try
 			{
-				WebPush.PushSubscription subscription = new(job.Endpoint, job.P256dh, job.Auth);
+				PushSubscription subscription = new(job.Endpoint, job.P256dh, job.Auth);
 				await _client.SendNotificationAsync(subscription, job.PayloadJson, vapid);
 			}
 			catch (WebPushException ex) when (ex.StatusCode == HttpStatusCode.NotFound || ex.StatusCode == HttpStatusCode.Gone)
