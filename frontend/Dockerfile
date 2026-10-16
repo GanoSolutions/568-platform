@@ -1,12 +1,12 @@
 # Stage 1: build React app with Vite
-# VITE_API_URL and VITE_VAPID_PUBLIC_KEY are baked into the JS bundle at build time
+# VITE_API_URL è bakata nel bundle JS in fase di build. La chiave VAPID invece
+# si legge a runtime da GET /push/vapid-public-key (issue #76) — non serve
+# più nessun build arg per quella.
 ARG VITE_API_URL=http://localhost:8080
 
 FROM node:22-alpine AS build
 ARG VITE_API_URL
-ARG VITE_VAPID_PUBLIC_KEY
 ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY
 
 WORKDIR /app
 COPY package*.json ./

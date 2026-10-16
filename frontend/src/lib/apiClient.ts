@@ -446,6 +446,9 @@ export interface PushSubscriptionPayload {
 }
 
 export const pushApi = {
+	/** 404 se WebPush non è configurato/abilitato sul server. */
+	vapidPublicKey: () => api.get<{ publicKey: string }>('/push/vapid-public-key'),
+
 	subscribe: (body: PushSubscriptionPayload) => api.post<void>('/push/subscribe', body),
 
 	unsubscribe: (endpoint: string) => api.post<void>('/push/unsubscribe', { endpoint }),

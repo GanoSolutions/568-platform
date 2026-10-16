@@ -1,14 +1,9 @@
 // usePushNotifications.ts
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { pushApi } from '@/lib/apiClient';
+import { ApiError, pushApi } from '@/lib/apiClient';
 
-const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 const pushServiceWorkerPath = '/push-sw-v2.js';
-
-function isPlaceholder(value: string | undefined, placeholder: string): boolean {
-	return !value || value === placeholder;
-}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 	const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -34,14 +29,17 @@ async function registerOnBackend(subscription: PushSubscription): Promise<void> 
 	});
 }
 
-export const isWebPushConfigured = !isPlaceholder(vapidPublicKey, 'your-vapid-public-key-here');
-
 export function usePushNotifications() {
 	const { user } = useAuth();
 	const [permission, setPermission] = useState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
 	const [enabled, setEnabled] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
+	// La chiave VAPID vive solo nel backend (issue #76 — prima andava rifatta la
+	// build Docker per cambiarla, ora si legge a runtime). null finché non è
+	// stata recuperata o se WebPush non è abilitato/configurato sul server (404).
+	const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+	const [vapidChecked, setVapidChecked] = useState(false);
 
 	useEffect(() => {
 		if (typeof Notification === 'undefined') {
@@ -52,12 +50,37 @@ export function usePushNotifications() {
 		setPermission(Notification.permission);
 	}, []);
 
+	useEffect(() => {
+		if (!user) {
+			setVapidPublicKey(null);
+			setVapidChecked(false);
+			return;
+		}
+
+		let mounted = true;
+
+		pushApi.vapidPublicKey()
+			.then(({ publicKey }) => { if (mounted) setVapidPublicKey(publicKey); })
+			.catch((e) => {
+				if (!mounted) return;
+				setVapidPublicKey(null);
+				// 404 = WebPush disabilitato/non configurato sul server, non un errore da mostrare.
+				if (!(e instanceof ApiError && e.status === 404)) {
+					setError((e as Error).message || 'Verifica configurazione notifiche non riuscita');
+				}
+			})
+			.finally(() => { if (mounted) setVapidChecked(true); });
+
+		return () => { mounted = false; };
+	}, [user]);
+
 	const availability = useMemo(() => {
 		if (!user) return 'signed-out';
-		if (!isWebPushConfigured) return 'vapid-missing';
+		if (!vapidChecked) return 'checking';
+		if (!vapidPublicKey) return 'vapid-missing';
 		if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
 		return 'ready';
-	}, [user]);
+	}, [user, vapidChecked, vapidPublicKey]);
 
 	// GET /push/status dice se l'utente ha almeno una subscription attiva su
 	// QUALSIASI dispositivo — va incrociato con la subscription di questo browser,
@@ -94,7 +117,7 @@ export function usePushNotifications() {
 	}, [availability]);
 
 	const enable = useCallback(async () => {
-		if (availability !== 'ready') return;
+		if (availability !== 'ready' || !vapidPublicKey) return;
 
 		setLoading(true);
 		setError('');
@@ -135,10 +158,10 @@ export function usePushNotifications() {
 		} finally {
 			setLoading(false);
 		}
-	}, [availability]);
+	}, [availability, vapidPublicKey]);
 
 	const registerIfGranted = useCallback(async () => {
-		if (availability !== 'ready') return;
+		if (availability !== 'ready' || !vapidPublicKey) return;
 		if (Notification.permission !== 'granted') return;
 
 		setLoading(true);
@@ -166,7 +189,7 @@ export function usePushNotifications() {
 		} finally {
 			setLoading(false);
 		}
-	}, [availability]);
+	}, [availability, vapidPublicKey]);
 
 	const disable = useCallback(async () => {
 		setLoading(true);
