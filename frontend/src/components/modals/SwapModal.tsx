@@ -1,19 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { isPastDay } from '@/hooks/useCalendar';
 import { formatTimeLabel } from '@/lib/shiftTime';
 import type { AppUser, Employee, ShiftData, SwapRequest } from '@/types';
 
 const DAYS_FULL = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 const MONTHS_FULL = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
-
-function isPastDay(date: Date): boolean {
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const day = new Date(date);
-	day.setHours(0, 0, 0, 0);
-	return day < today;
-}
 
 interface SwapModalProps {
 	date: Date

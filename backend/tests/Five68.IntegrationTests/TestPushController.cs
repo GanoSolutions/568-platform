@@ -4,6 +4,7 @@ using System.Text.Json;
 using Five68.Models;
 using Five68.Models.DTO;
 using Five68.Services;
+using Five68.Utils;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -41,7 +42,7 @@ public class TestPushController
 			"i test di integrazione non devono inviare push reali: AppSettings:WebPush:Enabled deve restare assente/false in appsettings.Testing.json");
 	}
 
-	private static string NewEndpoint(string name) => $"https://push.example.com/{name}";
+	private static string NewEndpoint(string name) => $"https://fcm.googleapis.com/fcm/send/{name}";
 
 	private List<PushSubscription> GetSubscriptions(string endpoint)
 	{
@@ -199,6 +200,42 @@ public class TestPushController
 
 		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 		GetSubscriptions(endpoint).Should().BeEmpty();
+	}
+
+	// Difesa SSRF: il worker fa una POST verso l'endpoint salvato, quindi solo push service noti.
+	// I casi limite dell'allowlist stanno negli unit test dell'attributo; qui si verifica che
+	// l'attributo sia davvero applicato al DTO di subscribe e che non si salvi nulla.
+	[Theory]
+	[InlineData("http://localhost:8080/internal")]
+	[InlineData("https://169.254.169.254/latest/meta-data/")]
+	[InlineData("https://fcm.googleapis.com.evil.com/fcm/send/x")]
+	[InlineData("https://evil.com/")]
+	public async Task Subscribe_EndpointOutsideAllowlist_Returns400AndStoresNothing(string endpoint)
+	{
+		factory_.SeedUser("push-ssrf@five68.com", UserRole.Employee);
+		await client_.AuthorizeAsAsync(factory_, "push-ssrf@five68.com");
+
+		HttpResponseMessage response = await SubscribeAsync(endpoint);
+
+		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		GetSubscriptions(endpoint).Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task Subscribe_EmptyEndpoint_ReportsASingleError()
+	{
+		// Il model binding di MVC esegue tutti gli attributi della proprietà senza fermarsi al primo:
+		// un endpoint vuoto deve dare solo l'errore di [Required], non uno per ogni attributo
+		factory_.SeedUser("push-sub-empty@five68.com", UserRole.Employee);
+		await client_.AuthorizeAsAsync(factory_, "push-sub-empty@five68.com");
+
+		HttpResponseMessage response = await SubscribeAsync(string.Empty);
+
+		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		JsonProperty endpointErrors = body.RootElement.GetProperty("errors").EnumerateObject()
+			.Single(p => p.Name.Equals("Endpoint", StringComparison.OrdinalIgnoreCase));
+		endpointErrors.Value.EnumerateArray().Select(e => e.GetString()).Should().ContainSingle();
 	}
 
 	[Fact]

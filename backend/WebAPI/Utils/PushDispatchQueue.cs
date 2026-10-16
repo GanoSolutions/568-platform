@@ -1,6 +1,7 @@
+using Five68.Services;
 using System.Threading.Channels;
 
-namespace Five68.Services
+namespace Five68.Utils
 {
 	/// <summary>
 	/// Coda in memoria (singleton) tra chi genera le notifiche e il worker che le invia.
