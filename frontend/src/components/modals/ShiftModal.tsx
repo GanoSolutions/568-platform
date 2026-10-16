@@ -144,12 +144,6 @@ export default function ShiftModal({ date, shift, employees, preselectedEmployee
 							})}
 						</div>
 
-						{isPast && (
-							<div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-							Questo giorno è già passato — il salvataggio chiederà conferma.
-							</div>
-						)}
-
 						{saveError && (
 							<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 whitespace-pre-line">
 								{saveError}
@@ -179,9 +173,9 @@ export default function ShiftModal({ date, shift, employees, preselectedEmployee
 							<DialogTitle className="text-slate-800">Turno nel passato</DialogTitle>
 						</DialogHeader>
 						<div className="px-5 pb-5">
-							<p className="text-slate-600 text-sm">
-							Stai salvando il turno di <span className="font-semibold text-slate-800 capitalize">{dayLabel}</span>, una data già passata. Confermi?
-							</p>
+							<div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+								Stai salvando il turno di <span className="font-semibold capitalize">{dayLabel}</span>, una data già passata. Confermi?
+							</div>
 						</div>
 						<DialogFooter className="px-5 pb-5 flex gap-2 mx-0 mb-0">
 							<Button variant="outline" onClick={() => setConfirmingPast(false)} disabled={submitting} className="flex-1 rounded-xl py-3 text-sm">Annulla</Button>
