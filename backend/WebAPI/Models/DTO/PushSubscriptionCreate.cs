@@ -1,3 +1,4 @@
+using Five68.Utils;
 using System.ComponentModel.DataAnnotations;
 
 namespace Five68.Models.DTO
@@ -6,7 +7,7 @@ namespace Five68.Models.DTO
 	{
 		[Required]
 		[MaxLength(2048)]
-		[Url]
+		[PushServiceEndpoint]
 		public string Endpoint { get; set; } = string.Empty;
 		[Required]
 		[MaxLength(256)]
