@@ -5,6 +5,8 @@ using Five68.Models;
 using Five68.Models.DTO;
 using Five68.Services;
 using FluentAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -431,6 +433,81 @@ public class TestPushController
 		await client_.AuthorizeAsAsync(factory_, "push-status-5-b@five68.com");
 
 		(await GetStatusAsync()).Should().BeFalse();
+	}
+
+	// --- GET /Push/vapid-public-key ---
+
+	private const string VapidPublicKey = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
+
+	/// <summary>
+	/// Host separato con Web Push abilitato: l'host condiviso resta con Enabled=false (vedi costruttore).
+	/// Il worker di invio qui parte, ma ha una sua PushDispatchQueue e nessun test vi accoda job.
+	/// </summary>
+	private WebApplicationFactory<Program> CreateFactoryWithWebPush(string publicKey)
+	{
+		return factory_.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+			services.PostConfigure<AppSettings>(s => s.WebPush = new WebPushSettings
+			{
+				Enabled = true,
+				PublicKey = publicKey,
+				PrivateKey = "test-private-key",
+				Subject = "mailto:test@five68.com",
+			})));
+	}
+
+	[Fact]
+	public async Task VapidPublicKey_Configured_ReturnsOnlyThePublicKey()
+	{
+		factory_.SeedUser("push-vapid-1@five68.com", UserRole.Employee);
+		await client_.AuthorizeAsAsync(factory_, "push-vapid-1@five68.com");
+
+		await using WebApplicationFactory<Program> pushFactory = CreateFactoryWithWebPush(VapidPublicKey);
+		HttpClient client = pushFactory.CreateClient();
+		client.DefaultRequestHeaders.Authorization = client_.DefaultRequestHeaders.Authorization;
+
+		HttpResponseMessage response = await client.GetAsync("/Push/vapid-public-key");
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		string json = await response.Content.ReadAsStringAsync();
+		using JsonDocument body = JsonDocument.Parse(json);
+		body.RootElement.GetProperty("publicKey").GetString().Should().Be(VapidPublicKey);
+		body.RootElement.EnumerateObject().Select(p => p.Name).Should().Equal(["publicKey"], "la risposta deve esporre solo la chiave pubblica");
+		json.Should().NotContain("test-private-key");
+	}
+
+	[Fact]
+	public async Task VapidPublicKey_WebPushDisabled_Returns404()
+	{
+		factory_.SeedUser("push-vapid-2@five68.com", UserRole.Employee);
+		await client_.AuthorizeAsAsync(factory_, "push-vapid-2@five68.com");
+
+		HttpResponseMessage response = await client_.GetAsync("/Push/vapid-public-key");
+
+		response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+	}
+
+	[Fact]
+	public async Task VapidPublicKey_EnabledButKeyMissing_Returns404()
+	{
+		factory_.SeedUser("push-vapid-3@five68.com", UserRole.Employee);
+		await client_.AuthorizeAsAsync(factory_, "push-vapid-3@five68.com");
+
+		await using WebApplicationFactory<Program> pushFactory = CreateFactoryWithWebPush(string.Empty);
+		HttpClient client = pushFactory.CreateClient();
+		client.DefaultRequestHeaders.Authorization = client_.DefaultRequestHeaders.Authorization;
+
+		HttpResponseMessage response = await client.GetAsync("/Push/vapid-public-key");
+
+		response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+	}
+
+	[Fact]
+	public async Task VapidPublicKey_Unauthenticated_Returns401()
+	{
+		client_.DefaultRequestHeaders.Authorization = null;
+		HttpResponseMessage response = await client_.GetAsync("/Push/vapid-public-key");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
 
 	// --- Ciclo di vita SwapRequest: chi finisce in coda ---

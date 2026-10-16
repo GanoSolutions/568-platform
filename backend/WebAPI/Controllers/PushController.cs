@@ -3,6 +3,7 @@ using Five68.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
 
@@ -14,9 +15,29 @@ namespace Five68.Controllers
 	public class PushController : Controller
 	{
 		private readonly PushSubscriptionService _service;
-		public PushController(PushSubscriptionService service)
+		private readonly WebPushSettings _webPushSettings;
+		public PushController(PushSubscriptionService service, IOptions<AppSettings> settings)
 		{
 			_service = service;
+			_webPushSettings = settings.Value.WebPush;
+		}
+
+		/// <summary>
+		/// Returns the VAPID public key the browser needs.
+		/// </summary>
+		/// <response code="200">Web Push is enabled: body is { publicKey }.</response>
+		/// <response code="401">Caller is not authenticated.</response>
+		/// <response code="404">Web Push is disabled or not configured on this server.</response>
+		[HttpGet("vapid-public-key")]
+		public IActionResult VapidPublicKey()
+		{
+			if (!_webPushSettings.Enabled || string.IsNullOrWhiteSpace(_webPushSettings.PublicKey))
+			{
+				return NotFound();
+			}
+
+			// Solo la chiave pubblica: mai serializzare WebPushSettings, che contiene anche la PrivateKey
+			return Ok(new { publicKey = _webPushSettings.PublicKey });
 		}
 		/// <summary>
 		/// Registers (or re-assigns) a Web Push subscription for the authenticated user.
