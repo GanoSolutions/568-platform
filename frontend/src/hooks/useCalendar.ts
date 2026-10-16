@@ -23,6 +23,11 @@ export function formatDateKey(date: Date): string {
 	return `${y}-${m}-${d}`;
 }
 
+/** True se `date` (confrontata a livello di giorno, ignorando l'ora) è prima di oggi. */
+export function isPastDay(date: Date): boolean {
+	return formatDateKey(date) < formatDateKey(new Date());
+}
+
 export function getWeekNumber(date: Date): number {
 	const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 	const dayNum = d.getUTCDay() || 7;
