@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { mapUserDTO, getUserIdFromToken } from '../AuthContext';
-import type { UserDTO } from '@/lib/apiClient';
+import { mapUserDTO } from '@/lib/userMapping';
+import { getUserIdFromToken, type UserDTO } from '@/lib/apiClient';
 
 // ─── A2: mapUserDTO ───────────────────────────────────────────────────────────
 

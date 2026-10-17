@@ -4,167 +4,162 @@ using Five68.Models;
 using Five68.Models.Authentication;
 using Five68.Models.DTO;
 using Five68.Utils;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
-namespace Five68.Services
+namespace Five68.Services;
+
+public class UserService
 {
-	public class UserService
+	private readonly UserFacade _userFacade;
+	private readonly ShiftFacade _shiftFacade;
+	private readonly TransactionFacade _transactionFacade;
+	private readonly RefreshTokenFacade _refreshTokenFacade;
+	private readonly AuthUtils _authUtils;
+	private readonly UserUtils _userUtils;
+	private readonly IInviteService _notificationService;
+	private readonly ILogger _logger;
+
+	public UserService(
+		UserFacade userFacade,
+		ShiftFacade shiftFacade,
+		TransactionFacade transactionFacade,
+		RefreshTokenFacade refreshTokenFacade,
+		AuthUtils authUtils,
+		UserUtils userUtils,
+		IInviteService notificationService,
+		ILogger<UserService> logger)
 	{
-		private readonly UserFacade _userFacade;
-		private readonly ShiftFacade _shiftFacade;
-		private readonly TransactionFacade _transactionFacade;
-		private readonly RefreshTokenFacade _refreshTokenFacade;
-		private readonly AuthUtils _authUtils;
-		private readonly UserUtils _userUtils;
-		private readonly IInviteService _notificationService;
-		private readonly ILogger _logger;
+		_userFacade = userFacade;
+		_shiftFacade = shiftFacade;
+		_transactionFacade = transactionFacade;
+		_refreshTokenFacade = refreshTokenFacade;
+		_authUtils = authUtils;
+		_userUtils = userUtils;
+		_notificationService = notificationService;
+		_logger = logger;
+	}
 
-		public UserService(
-			UserFacade userFacade,
-			ShiftFacade shiftFacade,
-			TransactionFacade transactionFacade,
-			RefreshTokenFacade refreshTokenFacade,
-			AuthUtils authUtils,
-			UserUtils userUtils,
-			IInviteService notificationService,
-			ILogger<UserService> logger)
+	public async Task<UserDTO?> GetUserDTO(Guid id)
+	{
+		return UserDTO.FromUser(await _userFacade.FindByIdAsync(id));
+	}
+
+	public async Task<User?> Get(Guid id)
+	{
+		return await _userFacade.FindByIdAsync(id);
+	}
+
+	public async Task<(bool success, User? user)> TryGetUserAndCheckPasswordAsync(UserLogin loginCredentials)
+	{
+		User? user = await _userFacade.FindByEmailAsync(loginCredentials.Email);
+
+		if (user is null)
 		{
-			_userFacade = userFacade;
-			_shiftFacade = shiftFacade;
-			_transactionFacade = transactionFacade;
-			_refreshTokenFacade = refreshTokenFacade;
-			_authUtils = authUtils;
-			_userUtils = userUtils;
-			_notificationService = notificationService;
-			_logger = logger;
+			return (false, null);
 		}
 
-		public async Task<UserDTO> GetUserDTO(Guid id)
+		if (!_userUtils.CheckPassword(user, loginCredentials.Password))
 		{
-			return UserDTO.FromUser(await _userFacade.FindByIdAsync(id));
+			return (false, null);
 		}
 
-		public async Task<User> Get(Guid id)
+		return (true, user);
+	}
+
+	public async Task<IEnumerable<UserDTO>> GetAll()
+	{
+		return (await _userFacade.GetAll()).Select(u => UserDTO.FromUser(u)!);
+	}
+
+	public async Task<string> GenerateInvite(Guid userId, Guid requesterId, bool sendEmail)
+	{
+		(User requester, User user, string token) = await CreateInviteToken(userId, requesterId);
+
+		if (sendEmail)
 		{
-			return await _userFacade.FindByIdAsync(id);
+			await _notificationService.SendInviteAsync(user.Email, token);
+			_logger.LogInformation("User {RequesterId} ({RequesterEmail}) invited {UserId} ({UserEmail}) to change password", requester.Id, requester.Email, user.Id, user.Email);
+		}
+		else
+		{
+			_logger.LogInformation("User {RequesterId} ({RequesterEmail}) generated an invite link for {UserId} ({UserEmail}) without sending an email", requester.Id, requester.Email, user.Id, user.Email);
 		}
 
-		public async Task<(bool success, User? user)> TryGetUserAndCheckPasswordAsync(UserLogin loginCredentials)
+		return token;
+	}
+
+	private async Task<(User requester, User user, string token)> CreateInviteToken(Guid userId, Guid requesterId)
+	{
+		User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
+
+		if (requester.Role >= UserRole.Employee)
 		{
-			User? user = await _userFacade.FindByEmailAsync(loginCredentials.Email);
-
-			if (user is null)
-			{
-				return (false, null);
-			}
-
-			if (!_userUtils.CheckPassword(user, loginCredentials.Password))
-			{
-				return (false, null);
-			}
-
-			return (true, user);
+			throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
 		}
 
-		public async Task<IEnumerable<UserDTO>> GetAll()
+		User user = await _userFacade.FindByIdAsync(userId) ?? throw new NotFoundException("Utente non trovato");
+
+		if (user.Status != UserStatus.Pending)
 		{
-			return (await _userFacade.GetAll()).Select(x => UserDTO.FromUser(x));
+			throw new EntityException("Si può generare un invito solo per un account in stato Pending");
 		}
 
-		public async Task<string> GenerateInvite(Guid userId, Guid requesterId, bool sendEmail)
+		string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+		user.Status = UserStatus.Pending;
+		user.InviteToken = token;
+		user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
+
+		await _userFacade.UpdateAsync(user);
+
+		return (requester, user, token);
+	}
+
+	public async Task Delete(Guid id, Guid requesterId)
+	{
+		User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
+		User user = await _userFacade.FindByIdAsync(id) ?? throw new NotFoundException("Utente non trovato");
+
+		// Soft-delete: NON si cancella la riga User/Employee (cascaderebbe su Shift/SwapRequest
+		// storici, vedi Five68DbContext.cs OnDelete=Cascade su quelle FK). Si disabilita
+		// l'account e si rimuove solo dalle giornate future, come richiesto dallo spec.
+		user.Status = UserStatus.Disabled;
+
+		await _transactionFacade.ExecuteAsync(async () =>
 		{
-			(User requester, User user, string token) = await CreateInviteToken(userId, requesterId);
-
-			if (sendEmail)
-			{
-				await _notificationService.SendInviteAsync(user.Email, token);
-				_logger.LogInformation($"User {requester.Id} ({requester.Email}) invited {user.Id} ({user.Email}) to change password");
-			}
-			else
-			{
-				_logger.LogInformation($"User {requester.Id} ({requester.Email}) generated an invite link for {user.Id} ({user.Email}) without sending an email");
-			}
-
-			return token;
-		}
-
-		private async Task<(User requester, User user, string token)> CreateInviteToken(Guid userId, Guid requesterId)
-		{
-			User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
-
-			if (requester.Role >= UserRole.Employee)
-			{
-				throw new ForbiddenException("Non hai i permessi per eseguire questa azione");
-			}
-
-			User user = await _userFacade.FindByIdAsync(userId) ?? throw new NotFoundException("Utente non trovato");
-
-			if (user.Status != UserStatus.Pending)
-			{
-				throw new EntityException("Si può generare un invito solo per un account in stato Pending");
-			}
-
-			string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-
-			user.Status = UserStatus.Pending;
-			user.InviteToken = token;
-			user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
-
 			await _userFacade.UpdateAsync(user);
+			await _shiftFacade.DeleteFutureAssignmentsForEmployeeAsync(id, DateOnly.FromDateTime(DateTime.UtcNow));
+			await _refreshTokenFacade.DeleteUserRefreshTokens(id);
+		});
 
-			return (requester, user, token);
-		}
+		_logger.LogInformation("User {RequesterId} ({RequesterEmail}) disabled user {UserId} ({UserEmail})", requester.Id, requester.Email, id, user.Email);
+	}
 
-		public async Task Delete(Guid id, Guid requesterId)
+	public async Task AcceptInvite(InviteAccept model)
+	{
+		User? user = await _userFacade.FindByInviteTokenAsync(model.Token);
+		if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
 		{
-			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
-			User user = await _userFacade.FindByIdAsync(id) ?? throw new NotFoundException("Utente non trovato");
-
-			// Soft-delete: NON si cancella la riga User/Employee (cascaderebbe su Shift/SwapRequest
-			// storici, vedi Five68DbContext.cs OnDelete=Cascade su quelle FK). Si disabilita
-			// l'account e si rimuove solo dalle giornate future, come richiesto dallo spec.
-			user.Status = UserStatus.Disabled;
-
-			await _transactionFacade.ExecuteAsync(async () =>
-			{
-				await _userFacade.UpdateAsync(user);
-				await _shiftFacade.DeleteFutureAssignmentsForEmployeeAsync(id, DateOnly.FromDateTime(DateTime.UtcNow));
-				await _refreshTokenFacade.DeleteUserRefreshTokens(id);
-			});
-
-			_logger.LogInformation($"User {requester.Id} ({requester.Email}) disabled user {id} ({user.Email})");
+			throw new UnauthorizedException("Token di invito non valido o scaduto");
 		}
 
-		public async Task AcceptInvite(InviteAccept model)
+		user.PasswordHash = _userUtils.HashAndCheckPassword(model.Password);
+		user.Status = UserStatus.Active;
+		user.InviteToken = null;
+		user.InviteTokenExpiry = null;
+		_logger.LogInformation("User {UserId} ({UserEmail}) accepted invite", user.Id, user.Email);
+
+		await _userFacade.UpdateAsync(user);
+	}
+
+	public async Task ChangePassword(Guid userId, ChangePassword model)
+	{
+		User user = await _userFacade.FindByIdAsync(userId) ?? throw new UnauthorizedException();
+		if (!_userUtils.CheckPassword(user, model.CurrentPassword))
 		{
-			User user = await _userFacade.FindByInviteTokenAsync(model.Token);
-			if (user is null || user.InviteTokenExpiry < DateTime.UtcNow)
-				throw new UnauthorizedException("Token di invito non valido o scaduto");
-
-			user.PasswordHash = _userUtils.HashAndCheckPassword(model.Password);
-			user.Status = UserStatus.Active;
-			user.InviteToken = null;
-			user.InviteTokenExpiry = null;
-			_logger.LogInformation($"User {user.Id} ({user.Email}) accepted invite");
-
-			await _userFacade.UpdateAsync(user);
+			throw new EntityException("La password attuale non è corretta");
 		}
 
-		public async Task ChangePassword(Guid userId, ChangePassword model)
-		{
-			User user = await _userFacade.FindByIdAsync(userId);
-			if (user is null)
-			{
-				throw new UnauthorizedException();
-			}
-
-			if (!_userUtils.CheckPassword(user, model.CurrentPassword))
-			{
-				throw new EntityException("La password attuale non è corretta");
-			}
-
-			user.PasswordHash = _userUtils.HashAndCheckPassword(model.NewPassword);
-			await _userFacade.UpdateAsync(user);
-		}
+		user.PasswordHash = _userUtils.HashAndCheckPassword(model.NewPassword);
+		await _userFacade.UpdateAsync(user);
 	}
 }

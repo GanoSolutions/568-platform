@@ -1,43 +1,37 @@
-using System.Net;
-using System.Net.Http.Json;
 using Five68.Hubs;
 using Five68.Models;
 using Five68.Models.DTO;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR.Client;
+using System.Net;
+using System.Net.Http.Json;
 
 namespace Five68.IntegrationTests;
 
 [Collection("Integration")]
 public class TestAppHub
 {
-	private readonly HttpClient client_;
-	private readonly Five68WebAppFactory factory_;
+	private readonly HttpClient _client;
+	private readonly Five68WebAppFactory _factory;
 
 	private const string ManagerEmail = "hub-manager@five68.com";
 
 	public TestAppHub(Five68WebAppFactory factory)
 	{
-		factory_ = factory;
-		client_ = factory.CreateClient();
-		factory_.SeedUser(ManagerEmail, UserRole.Manager);
+		_factory = factory;
+		_client = factory.CreateClient();
+		_factory.SeedUser(ManagerEmail, UserRole.Manager);
 	}
 
 	private HubConnection BuildConnection(string accessToken)
 	{
 		return new HubConnectionBuilder()
-			.WithUrl($"{client_.BaseAddress}hubs/app", options =>
+			.WithUrl($"{_client.BaseAddress}hubs/app", options =>
 			{
-				options.HttpMessageHandlerFactory = _ => factory_.Server.CreateHandler();
+				options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
 				options.AccessTokenProvider = () => Task.FromResult<string?>(accessToken);
 			})
 			.Build();
-	}
-
-	private static async Task<bool> WaitAsync(TaskCompletionSource signal, TimeSpan timeout)
-	{
-		Task completed = await Task.WhenAny(signal.Task, Task.Delay(timeout));
-		return completed == signal.Task;
 	}
 
 	private static async Task<bool> WaitAsync<T>(TaskCompletionSource<T> signal, TimeSpan timeout)
@@ -51,7 +45,7 @@ public class TestAppHub
 	[Fact]
 	public async Task Negotiate_WithoutToken_Returns401()
 	{
-		HttpResponseMessage response = await client_.PostAsync("/hubs/app/negotiate?negotiateVersion=1", null);
+		HttpResponseMessage response = await _client.PostAsync("/hubs/app/negotiate?negotiateVersion=1", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -59,10 +53,10 @@ public class TestAppHub
 	[Fact]
 	public async Task Negotiate_WithValidToken_Returns200()
 	{
-		await client_.AuthorizeAsAsync(factory_, ManagerEmail);
-		string token = client_.DefaultRequestHeaders.Authorization!.Parameter!;
+		await _client.AuthorizeAsAsync(_factory, ManagerEmail);
+		string token = _client.DefaultRequestHeaders.Authorization!.Parameter!;
 
-		HttpResponseMessage response = await client_.PostAsync($"/hubs/app/negotiate?negotiateVersion=1&access_token={token}", null);
+		HttpResponseMessage response = await _client.PostAsync($"/hubs/app/negotiate?negotiateVersion=1&access_token={token}", null);
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 	}
@@ -72,20 +66,20 @@ public class TestAppHub
 	[Fact]
 	public async Task CreatingSwapRequest_BroadcastsSwapRequestsChanged()
 	{
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("hub-sr-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("hub-sr-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 8, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("hub-sr-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("hub-sr-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 8, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
-		await client_.AuthorizeAsAsync(factory_, "hub-sr-req@five68.com");
-		string token = client_.DefaultRequestHeaders.Authorization!.Parameter!;
+		await _client.AuthorizeAsAsync(_factory, "hub-sr-req@five68.com");
+		string token = _client.DefaultRequestHeaders.Authorization!.Parameter!;
 
 		await using HubConnection connection = BuildConnection(token);
 		TaskCompletionSource<SwapRequestChangedEvent> eventReceived = new();
 		connection.On<SwapRequestChangedEvent>("SwapRequestsChanged", payload => eventReceived.TrySetResult(payload));
 		await connection.StartAsync();
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
@@ -94,43 +88,46 @@ public class TestAppHub
 
 		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
 		received.Should().BeTrue("la creazione di una swap request deve far arrivare l'evento SwapRequestsChanged");
-		eventReceived.Task.Result.RequesterId.Should().Be(requesterId);
-		eventReceived.Task.Result.Status.Should().Be(SwapRequestStatus.Pending);
+		(await eventReceived.Task).RequesterId.Should().Be(requesterId);
+		(await eventReceived.Task).Status.Should().Be(SwapRequestStatus.Pending);
 	}
 
 	[Fact]
 	public async Task AcceptingSwapRequest_BroadcastsSwapRequestsChangedWithAcceptedStatus()
 	{
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("hub-sr-acc-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("hub-sr-acc-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 8, 4), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("hub-sr-acc-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("hub-sr-acc-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 8, 4), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
-		await client_.AuthorizeAsAsync(factory_, "hub-sr-acc-req@five68.com");
-		string requesterToken = client_.DefaultRequestHeaders.Authorization!.Parameter!;
-		HttpResponseMessage createResponse = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		await _client.AuthorizeAsAsync(_factory, "hub-sr-acc-req@five68.com");
+		string requesterToken = _client.DefaultRequestHeaders.Authorization!.Parameter!;
+		HttpResponseMessage createResponse = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
 		});
-		List<SwapRequestDTO> created = await createResponse.Content.ReadFromJsonAsync<List<SwapRequestDTO>>();
+		List<SwapRequestDTO>? created = await createResponse.Content.ReadFromJsonAsync<List<SwapRequestDTO>>();
 		Guid swapRequestId = created![0].Id;
 
 		await using HubConnection connection = BuildConnection(requesterToken);
 		TaskCompletionSource<SwapRequestChangedEvent> eventReceived = new();
 		connection.On<SwapRequestChangedEvent>("SwapRequestsChanged", payload =>
 		{
-			if (payload.Status == SwapRequestStatus.Accepted) eventReceived.TrySetResult(payload);
+			if (payload.Status == SwapRequestStatus.Accepted)
+			{
+				eventReceived.TrySetResult(payload);
+			}
 		});
 		await connection.StartAsync();
 
-		await client_.AuthorizeAsAsync(factory_, "hub-sr-acc-tgt@five68.com");
-		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{swapRequestId}/accept", null);
+		await _client.AuthorizeAsAsync(_factory, "hub-sr-acc-tgt@five68.com");
+		HttpResponseMessage response = await _client.PostAsync($"/SwapRequest/{swapRequestId}/accept", null);
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
 		received.Should().BeTrue("l'accettazione di una swap request deve far arrivare l'evento SwapRequestsChanged con lo stato aggiornato");
-		eventReceived.Task.Result.RequesterId.Should().Be(requesterId);
+		(await eventReceived.Task).RequesterId.Should().Be(requesterId);
 	}
 
 	// --- Broadcast: turni ---
@@ -138,11 +135,11 @@ public class TestAppHub
 	[Fact]
 	public async Task CreatingShift_BroadcastsShiftsChanged()
 	{
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid employeeId = factory_.CreateEmployee("hub-shift-emp@five68.com");
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid employeeId = _factory.CreateEmployee("hub-shift-emp@five68.com");
 
-		await client_.AuthorizeAsAsync(factory_, ManagerEmail);
-		string token = client_.DefaultRequestHeaders.Authorization!.Parameter!;
+		await _client.AuthorizeAsAsync(_factory, ManagerEmail);
+		string token = _client.DefaultRequestHeaders.Authorization!.Parameter!;
 
 		await using HubConnection connection = BuildConnection(token);
 		TaskCompletionSource<ShiftChangedEvent> eventReceived = new();
@@ -150,7 +147,7 @@ public class TestAppHub
 		await connection.StartAsync();
 
 		DateOnly shiftDate = new(2031, 8, 2);
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/Shift", new ShiftCreate
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/Shift", new ShiftCreate
 		{
 			EmployeeId = employeeId,
 			Date = shiftDate,
@@ -161,30 +158,30 @@ public class TestAppHub
 
 		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
 		received.Should().BeTrue("la creazione di un turno deve far arrivare l'evento ShiftsChanged");
-		eventReceived.Task.Result.Date.Should().Be(shiftDate);
+		(await eventReceived.Task).Date.Should().Be(shiftDate);
 	}
 
 	[Fact]
 	public async Task DeletingShift_BroadcastsShiftsChanged()
 	{
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid employeeId = factory_.CreateEmployee("hub-shift-del-emp@five68.com");
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid employeeId = _factory.CreateEmployee("hub-shift-del-emp@five68.com");
 		DateOnly shiftDate = new(2031, 8, 3);
-		Guid shiftId = factory_.SeedShift(employeeId, shiftDate, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid shiftId = _factory.SeedShift(employeeId, shiftDate, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
-		await client_.AuthorizeAsAsync(factory_, ManagerEmail);
-		string token = client_.DefaultRequestHeaders.Authorization!.Parameter!;
+		await _client.AuthorizeAsAsync(_factory, ManagerEmail);
+		string token = _client.DefaultRequestHeaders.Authorization!.Parameter!;
 
 		await using HubConnection connection = BuildConnection(token);
 		TaskCompletionSource<ShiftChangedEvent> eventReceived = new();
 		connection.On<ShiftChangedEvent>("ShiftsChanged", payload => eventReceived.TrySetResult(payload));
 		await connection.StartAsync();
 
-		HttpResponseMessage response = await client_.DeleteAsync($"/Shift/{shiftId}");
+		HttpResponseMessage response = await _client.DeleteAsync($"/Shift/{shiftId}");
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
 		bool received = await WaitAsync(eventReceived, TimeSpan.FromSeconds(5));
 		received.Should().BeTrue("la cancellazione di un turno deve far arrivare l'evento ShiftsChanged");
-		eventReceived.Task.Result.Date.Should().Be(shiftDate);
+		(await eventReceived.Task).Date.Should().Be(shiftDate);
 	}
 }

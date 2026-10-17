@@ -4,7 +4,7 @@ namespace Five68.UnitTests;
 
 public class TestPushServiceEndpointAttribute
 {
-	private readonly PushServiceEndpointAttribute sut_ = new();
+	private readonly PushServiceEndpointAttribute _sut = new();
 
 	// --- Push service reali ---
 
@@ -17,7 +17,7 @@ public class TestPushServiceEndpointAttribute
 	[InlineData("https://fcm.googleapis.com:443/fcm/send/abc123")]
 	public void IsValid_KnownPushService_ReturnsTrue(string endpoint)
 	{
-		sut_.IsValid(endpoint).Should().BeTrue();
+		_sut.IsValid(endpoint).Should().BeTrue();
 	}
 
 	// --- Valore mancante: lo segnala [Required], non questo attributo ---
@@ -28,7 +28,7 @@ public class TestPushServiceEndpointAttribute
 	[InlineData("   ")]
 	public void IsValid_MissingValue_ReturnsTrue(string? endpoint)
 	{
-		sut_.IsValid(endpoint).Should().BeTrue();
+		_sut.IsValid(endpoint).Should().BeTrue();
 	}
 
 	// --- Tentativi di SSRF e host non ammessi ---
@@ -53,7 +53,7 @@ public class TestPushServiceEndpointAttribute
 	[InlineData("non-e-un-url")]
 	public void IsValid_NotAPushService_ReturnsFalse(string endpoint)
 	{
-		sut_.IsValid(endpoint).Should().BeFalse();
+		_sut.IsValid(endpoint).Should().BeFalse();
 	}
 
 	[Fact]
@@ -61,6 +61,6 @@ public class TestPushServiceEndpointAttribute
 	{
 		// Applicato per errore a una proprietà non stringa non deve far fallire la validazione:
 		// coerente con gli attributi built-in come [Url]
-		sut_.IsValid(42).Should().BeTrue();
+		_sut.IsValid(42).Should().BeTrue();
 	}
 }

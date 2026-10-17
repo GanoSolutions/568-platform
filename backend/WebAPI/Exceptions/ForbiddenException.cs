@@ -1,8 +1,7 @@
-namespace Five68.Exceptions
+namespace Five68.Exceptions;
+
+public class ForbiddenException : Exception
 {
-	public class ForbiddenException : Exception
-	{
-		public ForbiddenException(string message) : base(message)
-		{ }
-	}
+	public ForbiddenException(string message) : base(message)
+	{ }
 }

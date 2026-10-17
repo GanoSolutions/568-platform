@@ -3,151 +3,142 @@ using Five68.Facades;
 using Five68.Models;
 using Five68.Models.DTO;
 using Five68.Utils;
-using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Five68.Services
+namespace Five68.Services;
+
+public class ShiftService
 {
-	public class ShiftService
+	private readonly ShiftFacade _shiftFacade;
+	private readonly EmployeeFacade _employeeFacade;
+	private readonly IShiftNotificationService _notificationService;
+	private readonly AuthUtils _authUtils;
+	private readonly ILogger _logger;
+
+	public ShiftService(
+		ShiftFacade shiftFacade,
+		EmployeeFacade employeeFacade,
+		IShiftNotificationService notificationService,
+		AuthUtils authUtils,
+		ILogger<ShiftService> logger)
 	{
-		private readonly ShiftFacade _shiftFacade;
-		private readonly UserFacade _userFacade;
-		private readonly EmployeeFacade _employeeFacade;
-		private readonly IShiftNotificationService _notificationService;
-		private readonly AuthUtils _authUtils;
-		private readonly ILogger _logger;
+		_shiftFacade = shiftFacade;
+		_employeeFacade = employeeFacade;
+		_notificationService = notificationService;
+		_authUtils = authUtils;
+		_logger = logger;
+	}
 
-		public ShiftService(
-			ShiftFacade shiftFacade,
-			UserFacade userFacade,
-			EmployeeFacade employeeFacade,
-			IShiftNotificationService notificationService,
-			AuthUtils authUtils,
-			ILogger<ShiftService> logger)
+	public async Task<ShiftDTO?> GetById(Guid id)
+	{
+		return ShiftDTO.FromShift(await _shiftFacade.FindByIdAsync(id));
+	}
+
+	public async Task<IEnumerable<ShiftDTO>> GetByDateRange(DateOnly start, DateOnly end)
+	{
+		return end < start
+			? throw new EntityException("La data di fine deve essere successiva alla data di inizio")
+			: (await _shiftFacade.GetByDateRangeAsync(start, end)).Select(s => ShiftDTO.FromShift(s)!);
+	}
+
+	public async Task<ShiftDTO> Create(ShiftCreate model, Guid requesterId)
+	{
+		User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
+		_ = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Dipendente non trovato");
+		if (await _shiftFacade.IsClosedDayAsync(model.Date))
 		{
-			_shiftFacade = shiftFacade;
-			_userFacade = userFacade;
-			_employeeFacade = employeeFacade;
-			_notificationService = notificationService;
-			_authUtils = authUtils;
-			_logger = logger;
+			throw new EntityException("Non è possibile assegnare un dipendente in un giorno di chiusura");
 		}
 
-		public async Task<ShiftDTO> GetById(Guid id)
+		Shift? existing = await _shiftFacade.FindByDateAndEmployeeAsync(model.Date, model.EmployeeId);
+		if (existing is not null)
 		{
-			return ShiftDTO.FromShift(await _shiftFacade.FindByIdAsync(id));
+			throw new EntityException("Il dipendente è già assegnato in questa data");
 		}
 
-		public async Task<IEnumerable<ShiftDTO>> GetByDateRange(DateOnly start, DateOnly end)
+		Shift created = await _shiftFacade.CreateAsync(new Shift
 		{
-			if (end < start)
-			{
-				throw new EntityException("La data di fine deve essere successiva alla data di inizio");
-			}
+			Id = Guid.NewGuid(),
+			Date = model.Date,
+			EmployeeId = model.EmployeeId,
+			StartTime = model.StartTime,
+			Duration = model.Duration,
+			CreatedBy = requesterId,
+		});
 
-			return (await _shiftFacade.GetByDateRangeAsync(start, end)).Select(ShiftDTO.FromShift);
+		await _notificationService.NotifyShiftChangedAsync(created.Date);
+		_logger.LogInformation("User {RequesterId} ({RequesterEmail}) created a {Duration} hours shift on {Date} for employee {EmployeeId} starting at {StartTime}", requester.Id, requester.Email, created.Duration, created.Date, created.EmployeeId, created.StartTime);
+
+		return ShiftDTO.FromShift(created)!;
+	}
+
+	public async Task<ShiftDTO> Update(Guid id, ShiftUpdate model, Guid requesterId)
+	{
+		User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
+
+		Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
+		if (await _shiftFacade.IsClosedDayAsync(shift.Date))
+		{
+			throw new EntityException("Non è possibile modificare un turno in un giorno di chiusura");
 		}
 
-		public async Task<ShiftDTO> Create(ShiftCreate model, Guid requesterId)
+		shift.StartTime = model.StartTime;
+		shift.Duration = model.Duration;
+
+		Shift updated = await _shiftFacade.UpdateAsync(shift);
+
+		await _notificationService.NotifyShiftChangedAsync(updated.Date);
+		_logger.LogInformation("User {RequesterId} ({RequesterEmail}) updated shift on {Date} to a {Duration} hours shift starting at {StartTime}", requester.Id, requester.Email, updated.Date, updated.Duration, updated.StartTime);
+
+		return ShiftDTO.FromShift(updated)!;
+	}
+
+	public async Task Delete(Guid id, Guid requesterId)
+	{
+		User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
+
+		Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
+
+		DateTime shiftEnd = shift.Date.ToDateTime(shift.StartTime).Add(shift.Duration);
+		if (shiftEnd < DateTime.Now)
 		{
-			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
+			throw new EntityException("Non è possibile eliminare un turno passato");
+		}
+		await _shiftFacade.DeleteAsync(shift);
 
-			Employee employee = await _employeeFacade.FindByIdAsync(model.EmployeeId) ?? throw new NotFoundException("Dipendente non trovato");
-			if (await _shiftFacade.IsClosedDayAsync(model.Date))
-			{
-				throw new EntityException("Non è possibile assegnare un dipendente in un giorno di chiusura");
-			}
+		await _notificationService.NotifyShiftChangedAsync(shift.Date);
+		_logger.LogInformation("User {RequesterId} ({RequesterEmail}) deleted shift on {Date} - {StartTime}", requester.Id, requester.Email, shift.Date, shift.StartTime);
+	}
 
-			Shift existing = await _shiftFacade.FindByDateAndEmployeeAsync(model.Date, model.EmployeeId);
-			if (existing is not null)
-			{
-				throw new EntityException("Il dipendente è già assegnato in questa data");
-			}
+	public async Task<ShiftCopyWeekResult> CopyWeek(ShiftCopyWeek model, Guid requesterId)
+	{
+		User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
 
-			Shift created = await _shiftFacade.CreateAsync(new Shift
-			{
-				Id = Guid.NewGuid(),
-				Date = model.Date,
-				EmployeeId = model.EmployeeId,
-				StartTime = model.StartTime,
-				Duration = model.Duration,
-				CreatedBy = requesterId,
-			});
-
-			await _notificationService.NotifyShiftChangedAsync(created.Date);
-			_logger.LogInformation($"User {requester.Id} ({requester.Email}) created a {created.Duration} hours shift on {created.Date} for employee {created.EmployeeId} starting at {created.StartTime}");
-
-			return ShiftDTO.FromShift(created);
+		if (model.SourceWeekMonday.DayOfWeek != DayOfWeek.Monday)
+		{
+			throw new EntityException("La settimana sorgente deve iniziare di lunedì");
 		}
 
-		public async Task<ShiftDTO> Update(Guid id, ShiftUpdate model, Guid requesterId)
+		if (model.TargetStartDate.DayOfWeek != DayOfWeek.Monday)
 		{
-			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
-
-			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
-			if (await _shiftFacade.IsClosedDayAsync(shift.Date))
-			{
-				throw new EntityException("Non è possibile modificare un turno in un giorno di chiusura");
-			}
-
-			shift.StartTime = model.StartTime;
-			shift.Duration = model.Duration;
-
-			Shift updated = await _shiftFacade.UpdateAsync(shift);
-
-			await _notificationService.NotifyShiftChangedAsync(updated.Date);
-			_logger.LogInformation($"User {requester.Id} ({requester.Email}) updated shift on {updated.Date} to a {updated.Duration} hours shift starting at {updated.StartTime}");
-
-			return ShiftDTO.FromShift(updated);
+			throw new EntityException("La data di inizio del periodo deve essere un lunedì");
 		}
 
-		public async Task Delete(Guid id, Guid requesterId)
+		if (model.TargetEndDate.DayOfWeek != DayOfWeek.Sunday)
 		{
-			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
-
-			Shift shift = await _shiftFacade.FindByIdAsync(id) ?? throw new NotFoundException("Turno non trovato");
-
-			DateTime shiftEnd = shift.Date.ToDateTime(shift.StartTime).Add(shift.Duration);
-			if (shiftEnd < DateTime.Now)
-			{
-				throw new EntityException("Non è possibile eliminare un turno passato");
-			}
-			await _shiftFacade.DeleteAsync(shift);
-
-			await _notificationService.NotifyShiftChangedAsync(shift.Date);
-			_logger.LogInformation($"User {requester.Id} ({requester.Email}) deleted shift on {shift.Date} - {shift.StartTime}");
+			throw new EntityException("La data di fine del periodo deve essere una domenica");
 		}
 
-				public async Task<ShiftCopyWeekResult> CopyWeek(ShiftCopyWeek model, Guid requesterId)
+		if (model.TargetEndDate < model.TargetStartDate)
 		{
-			User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
-
-			if (model.SourceWeekMonday.DayOfWeek != DayOfWeek.Monday)
-			{
-				throw new EntityException("La settimana sorgente deve iniziare di lunedì");
-			}
-
-			if (model.TargetStartDate.DayOfWeek != DayOfWeek.Monday)
-			{
-				throw new EntityException("La data di inizio del periodo deve essere un lunedì");
-			}
-
-			if (model.TargetEndDate.DayOfWeek != DayOfWeek.Sunday)
-			{
-				throw new EntityException("La data di fine del periodo deve essere una domenica");
-			}
-
-			if (model.TargetEndDate < model.TargetStartDate)
-			{
-				throw new EntityException("La data di fine deve essere successiva alla data di inizio");
-			}
-
-			ShiftCopyWeekResult result = await _shiftFacade.CopyWeekAsync(
-				model.SourceWeekMonday, model.TargetStartDate, model.TargetEndDate, requesterId) ??
-				throw new EntityException("La settimana selezionata non contiene turni da copiare");
-
-			_logger.LogInformation($"User {requester.Email} copied week of {model.SourceWeekMonday} onto {model.TargetStartDate}-{model.TargetEndDate}: {result.Created} created, {result.Overwritten} overwritten, {result.SkippedClosedDays} skipped");
-
-			return result;
+			throw new EntityException("La data di fine deve essere successiva alla data di inizio");
 		}
+
+		ShiftCopyWeekResult result = await _shiftFacade.CopyWeekAsync(
+			model.SourceWeekMonday, model.TargetStartDate, model.TargetEndDate, requesterId) ??
+			throw new EntityException("La settimana selezionata non contiene turni da copiare");
+
+		_logger.LogInformation("User {RequesterEmail} copied week of {SourceWeekMonday} onto {TargetStartDate}-{TargetEndDate}: {Created} created, {Overwritten} overwritten, {SkippedClosedDays} skipped", requester.Email, model.SourceWeekMonday, model.TargetStartDate, model.TargetEndDate, result.Created, result.Overwritten, result.SkippedClosedDays);
+
+		return result;
 	}
 }

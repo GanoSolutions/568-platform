@@ -1,7 +1,6 @@
-namespace Five68.Services
+namespace Five68.Services;
+
+public interface IInviteService
 {
-	public interface IInviteService
-	{
-		Task SendInviteAsync(string toEmail, string inviteLink);
-	}
+	Task SendInviteAsync(string toEmail, string inviteLink);
 }

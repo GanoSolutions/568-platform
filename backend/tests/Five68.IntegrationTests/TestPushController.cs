@@ -1,6 +1,3 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using Five68.Models;
 using Five68.Models.DTO;
 using Five68.Services;
@@ -10,14 +7,17 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace Five68.IntegrationTests;
 
 [Collection("Integration")]
 public class TestPushController
 {
-	private readonly HttpClient client_;
-	private readonly Five68WebAppFactory factory_;
+	private readonly HttpClient _client;
+	private readonly Five68WebAppFactory _factory;
 
 	private const string AdminEmail = "push-admin@five68.com";
 	private const string ManagerEmail = "push-manager@five68.com";
@@ -29,31 +29,34 @@ public class TestPushController
 
 	public TestPushController(Five68WebAppFactory factory)
 	{
-		factory_ = factory;
-		client_ = factory.CreateClient();
-		factory_.SeedUser(AdminEmail, UserRole.Admin);
-		factory_.SeedUser(ManagerEmail, UserRole.Manager);
+		_factory = factory;
+		_client = factory.CreateClient();
+		_factory.SeedUser(AdminEmail, UserRole.Admin);
+		_factory.SeedUser(ManagerEmail, UserRole.Manager);
 
 		// I test sul dispatch leggono direttamente PushDispatchQueue (il "seam" prima dell'invio
 		// HTTP verso il push service): funziona solo finché il worker resta spento in Testing,
 		// altrimenti sarebbe lui a consumare i job — e proverebbe a fare rete davvero.
-		AppSettings settings = factory_.Services.GetRequiredService<IOptions<AppSettings>>().Value;
+		AppSettings settings = _factory.Services.GetRequiredService<IOptions<AppSettings>>().Value;
 		settings.WebPush.Enabled.Should().BeFalse(
 			"i test di integrazione non devono inviare push reali: AppSettings:WebPush:Enabled deve restare assente/false in appsettings.Testing.json");
 	}
 
-	private static string NewEndpoint(string name) => $"https://fcm.googleapis.com/fcm/send/{name}";
+	private static string NewEndpoint(string name)
+	{
+		return $"https://fcm.googleapis.com/fcm/send/{name}";
+	}
 
 	private List<PushSubscription> GetSubscriptions(string endpoint)
 	{
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		return db.PushSubscriptions.Where(x => x.Endpoint == endpoint).ToList();
 	}
 
 	private void SeedSubscription(Guid userId, string endpoint, bool active = true)
 	{
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 
 		db.PushSubscriptions.Add(new PushSubscription
@@ -73,7 +76,7 @@ public class TestPushController
 	// condiviso da tutta la collection, che però gira in sequenza).
 	private void ClearSubscriptions()
 	{
-		using IServiceScope scope = factory_.Services.CreateScope();
+		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
 		db.PushSubscriptions.RemoveRange(db.PushSubscriptions);
 		db.SaveChanges();
@@ -81,7 +84,7 @@ public class TestPushController
 
 	private async Task<HttpResponseMessage> SubscribeAsync(string endpoint, string? userAgent = null)
 	{
-		return await client_.PostAsJsonAsync("/Push/subscribe", new PushSubscriptionCreate
+		return await _client.PostAsJsonAsync("/Push/subscribe", new PushSubscriptionCreate
 		{
 			Endpoint = endpoint,
 			P256dh = P256dh,
@@ -92,12 +95,12 @@ public class TestPushController
 
 	private async Task<HttpResponseMessage> UnsubscribeAsync(string endpoint)
 	{
-		return await client_.PostAsJsonAsync("/Push/unsubscribe", new PushUnsubscribe { Endpoint = endpoint });
+		return await _client.PostAsJsonAsync("/Push/unsubscribe", new PushUnsubscribe { Endpoint = endpoint });
 	}
 
 	private async Task<bool> GetStatusAsync()
 	{
-		HttpResponseMessage response = await client_.GetAsync("/Push/status");
+		HttpResponseMessage response = await _client.GetAsync("/Push/status");
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -110,7 +113,7 @@ public class TestPushController
 	/// </summary>
 	private async Task<List<PushJob>> DrainQueueAsync()
 	{
-		PushDispatchQueue queue = factory_.Services.GetRequiredService<PushDispatchQueue>();
+		PushDispatchQueue queue = _factory.Services.GetRequiredService<PushDispatchQueue>();
 		List<PushJob> jobs = [];
 
 		using CancellationTokenSource cts = new(TimeSpan.FromMilliseconds(250));
@@ -134,11 +137,11 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_Authenticated_Returns204AndStoresActiveSubscription()
 	{
-		factory_.SeedUser("push-sub-1@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-sub-1@five68.com");
+		_factory.SeedUser("push-sub-1@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-sub-1@five68.com");
 		string endpoint = NewEndpoint("sub-1");
 
-		await client_.AuthorizeAsAsync(factory_, "push-sub-1@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-sub-1@five68.com");
 		HttpResponseMessage response = await SubscribeAsync(endpoint, "Mozilla/5.0 (Android)");
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -155,7 +158,7 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
+		_client.DefaultRequestHeaders.Authorization = null;
 		HttpResponseMessage response = await SubscribeAsync(NewEndpoint("sub-anon"));
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -165,10 +168,10 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_MissingEndpoint_Returns400()
 	{
-		factory_.SeedUser("push-sub-3@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-sub-3@five68.com");
+		_factory.SeedUser("push-sub-3@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-sub-3@five68.com");
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/Push/subscribe", new { p256dh = P256dh, auth = Auth });
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/Push/subscribe", new { p256dh = P256dh, auth = Auth });
 
 		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 	}
@@ -176,10 +179,10 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_EndpointNotAUrl_Returns400()
 	{
-		factory_.SeedUser("push-sub-4@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-sub-4@five68.com");
+		_factory.SeedUser("push-sub-4@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-sub-4@five68.com");
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/Push/subscribe", new
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/Push/subscribe", new
 		{
 			endpoint = "non-e-un-url",
 			p256dh = P256dh,
@@ -192,11 +195,11 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_MissingKeys_Returns400()
 	{
-		factory_.SeedUser("push-sub-5@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-sub-5@five68.com");
+		_factory.SeedUser("push-sub-5@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-sub-5@five68.com");
 		string endpoint = NewEndpoint("sub-5");
 
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/Push/subscribe", new { endpoint });
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/Push/subscribe", new { endpoint });
 
 		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 		GetSubscriptions(endpoint).Should().BeEmpty();
@@ -212,8 +215,8 @@ public class TestPushController
 	[InlineData("https://evil.com/")]
 	public async Task Subscribe_EndpointOutsideAllowlist_Returns400AndStoresNothing(string endpoint)
 	{
-		factory_.SeedUser("push-ssrf@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-ssrf@five68.com");
+		_factory.SeedUser("push-ssrf@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-ssrf@five68.com");
 
 		HttpResponseMessage response = await SubscribeAsync(endpoint);
 
@@ -226,8 +229,8 @@ public class TestPushController
 	{
 		// Il model binding di MVC esegue tutti gli attributi della proprietà senza fermarsi al primo:
 		// un endpoint vuoto deve dare solo l'errore di [Required], non uno per ogni attributo
-		factory_.SeedUser("push-sub-empty@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-sub-empty@five68.com");
+		_factory.SeedUser("push-sub-empty@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-sub-empty@five68.com");
 
 		HttpResponseMessage response = await SubscribeAsync(string.Empty);
 
@@ -244,17 +247,17 @@ public class TestPushController
 		// Regressione "device condiviso": due colleghi usano lo stesso browser/tablet. Alla
 		// seconda iscrizione la riga deve cambiare proprietario, altrimenti il primo utente
 		// continuerebbe a ricevere le notifiche destinate al secondo.
-		factory_.SeedUser("push-shared-a@five68.com", UserRole.Employee);
-		factory_.SeedUser("push-shared-b@five68.com", UserRole.Employee);
-		Guid userA = factory_.GetUserId("push-shared-a@five68.com");
-		Guid userB = factory_.GetUserId("push-shared-b@five68.com");
+		_factory.SeedUser("push-shared-a@five68.com", UserRole.Employee);
+		_factory.SeedUser("push-shared-b@five68.com", UserRole.Employee);
+		Guid userA = _factory.GetUserId("push-shared-a@five68.com");
+		Guid userB = _factory.GetUserId("push-shared-b@five68.com");
 		string endpoint = NewEndpoint("shared-device");
 
-		await client_.AuthorizeAsAsync(factory_, "push-shared-a@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-shared-a@five68.com");
 		(await SubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 		GetSubscriptions(endpoint).Single().UserId.Should().Be(userA);
 
-		await client_.AuthorizeAsAsync(factory_, "push-shared-b@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-shared-b@five68.com");
 		(await SubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
 		List<PushSubscription> stored = GetSubscriptions(endpoint);
@@ -266,12 +269,12 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_SameUserTwoEndpoints_KeepsBothActive()
 	{
-		factory_.SeedUser("push-multi@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-multi@five68.com");
+		_factory.SeedUser("push-multi@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-multi@five68.com");
 		string phone = NewEndpoint("multi-phone");
 		string desktop = NewEndpoint("multi-desktop");
 
-		await client_.AuthorizeAsAsync(factory_, "push-multi@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-multi@five68.com");
 		(await SubscribeAsync(phone, "Android")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 		(await SubscribeAsync(desktop, "Chrome/Windows")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
@@ -282,10 +285,10 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_SameUserSameEndpointTwice_RefreshesKeysWithoutDuplicating()
 	{
-		factory_.SeedUser("push-refresh@five68.com", UserRole.Employee);
+		_factory.SeedUser("push-refresh@five68.com", UserRole.Employee);
 		string endpoint = NewEndpoint("refresh");
 
-		await client_.AuthorizeAsAsync(factory_, "push-refresh@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-refresh@five68.com");
 		await SubscribeAsync(endpoint, "vecchio-user-agent");
 		HttpResponseMessage response = await SubscribeAsync(endpoint, "nuovo-user-agent");
 
@@ -298,12 +301,12 @@ public class TestPushController
 	[Fact]
 	public async Task Subscribe_AfterUnsubscribe_ReactivatesSameRow()
 	{
-		factory_.SeedUser("push-reactivate@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-reactivate@five68.com");
+		_factory.SeedUser("push-reactivate@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-reactivate@five68.com");
 		string endpoint = NewEndpoint("reactivate");
 		SeedSubscription(userId, endpoint, active: false);
 
-		await client_.AuthorizeAsAsync(factory_, "push-reactivate@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-reactivate@five68.com");
 		HttpResponseMessage response = await SubscribeAsync(endpoint);
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -317,12 +320,12 @@ public class TestPushController
 	[Fact]
 	public async Task Unsubscribe_OwnSubscription_Returns204AndDeactivates()
 	{
-		factory_.SeedUser("push-unsub-1@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-unsub-1@five68.com");
+		_factory.SeedUser("push-unsub-1@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-unsub-1@five68.com");
 		string endpoint = NewEndpoint("unsub-1");
 		SeedSubscription(userId, endpoint);
 
-		await client_.AuthorizeAsAsync(factory_, "push-unsub-1@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-unsub-1@five68.com");
 		HttpResponseMessage response = await UnsubscribeAsync(endpoint);
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -332,12 +335,12 @@ public class TestPushController
 	[Fact]
 	public async Task Unsubscribe_CalledTwice_IsIdempotent()
 	{
-		factory_.SeedUser("push-unsub-2@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-unsub-2@five68.com");
+		_factory.SeedUser("push-unsub-2@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-unsub-2@five68.com");
 		string endpoint = NewEndpoint("unsub-2");
 		SeedSubscription(userId, endpoint);
 
-		await client_.AuthorizeAsAsync(factory_, "push-unsub-2@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-unsub-2@five68.com");
 		(await UnsubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 		HttpResponseMessage second = await UnsubscribeAsync(endpoint);
 
@@ -348,9 +351,9 @@ public class TestPushController
 	[Fact]
 	public async Task Unsubscribe_UnknownEndpoint_Returns204()
 	{
-		factory_.SeedUser("push-unsub-3@five68.com", UserRole.Employee);
+		_factory.SeedUser("push-unsub-3@five68.com", UserRole.Employee);
 
-		await client_.AuthorizeAsAsync(factory_, "push-unsub-3@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-unsub-3@five68.com");
 		HttpResponseMessage response = await UnsubscribeAsync(NewEndpoint("mai-registrato"));
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -359,13 +362,13 @@ public class TestPushController
 	[Fact]
 	public async Task Unsubscribe_OtherUsersEndpoint_LeavesItActive()
 	{
-		factory_.SeedUser("push-unsub-owner@five68.com", UserRole.Employee);
-		factory_.SeedUser("push-unsub-intruder@five68.com", UserRole.Employee);
-		Guid ownerId = factory_.GetUserId("push-unsub-owner@five68.com");
+		_factory.SeedUser("push-unsub-owner@five68.com", UserRole.Employee);
+		_factory.SeedUser("push-unsub-intruder@five68.com", UserRole.Employee);
+		Guid ownerId = _factory.GetUserId("push-unsub-owner@five68.com");
 		string ownerEndpoint = NewEndpoint("unsub-owner");
 		SeedSubscription(ownerId, ownerEndpoint);
 
-		await client_.AuthorizeAsAsync(factory_, "push-unsub-intruder@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-unsub-intruder@five68.com");
 		HttpResponseMessage response = await UnsubscribeAsync(ownerEndpoint);
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -375,14 +378,14 @@ public class TestPushController
 	[Fact]
 	public async Task Unsubscribe_OnlyDeactivatesTheGivenEndpoint()
 	{
-		factory_.SeedUser("push-unsub-5@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-unsub-5@five68.com");
+		_factory.SeedUser("push-unsub-5@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-unsub-5@five68.com");
 		string phone = NewEndpoint("unsub-5-phone");
 		string desktop = NewEndpoint("unsub-5-desktop");
 		SeedSubscription(userId, phone);
 		SeedSubscription(userId, desktop);
 
-		await client_.AuthorizeAsAsync(factory_, "push-unsub-5@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-unsub-5@five68.com");
 		(await UnsubscribeAsync(phone)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
 		GetSubscriptions(phone).Single().Active.Should().BeFalse();
@@ -392,7 +395,7 @@ public class TestPushController
 	[Fact]
 	public async Task Unsubscribe_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
+		_client.DefaultRequestHeaders.Authorization = null;
 		HttpResponseMessage response = await UnsubscribeAsync(NewEndpoint("unsub-anon"));
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -403,9 +406,9 @@ public class TestPushController
 	[Fact]
 	public async Task Status_NoSubscription_ReturnsFalse()
 	{
-		factory_.SeedUser("push-status-1@five68.com", UserRole.Employee);
+		_factory.SeedUser("push-status-1@five68.com", UserRole.Employee);
 
-		await client_.AuthorizeAsAsync(factory_, "push-status-1@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-status-1@five68.com");
 
 		(await GetStatusAsync()).Should().BeFalse();
 	}
@@ -413,9 +416,9 @@ public class TestPushController
 	[Fact]
 	public async Task Status_AfterSubscribe_ReturnsTrue()
 	{
-		factory_.SeedUser("push-status-2@five68.com", UserRole.Employee);
+		_factory.SeedUser("push-status-2@five68.com", UserRole.Employee);
 
-		await client_.AuthorizeAsAsync(factory_, "push-status-2@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-status-2@five68.com");
 		(await SubscribeAsync(NewEndpoint("status-2"))).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
 		(await GetStatusAsync()).Should().BeTrue();
@@ -424,12 +427,12 @@ public class TestPushController
 	[Fact]
 	public async Task Status_AfterUnsubscribe_ReturnsFalse()
 	{
-		factory_.SeedUser("push-status-3@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-status-3@five68.com");
+		_factory.SeedUser("push-status-3@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-status-3@five68.com");
 		string endpoint = NewEndpoint("status-3");
 		SeedSubscription(userId, endpoint);
 
-		await client_.AuthorizeAsAsync(factory_, "push-status-3@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-status-3@five68.com");
 		(await GetStatusAsync()).Should().BeTrue();
 
 		(await UnsubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -440,12 +443,12 @@ public class TestPushController
 	[Fact]
 	public async Task Status_OnlyOtherDeviceStillActive_ReturnsTrue()
 	{
-		factory_.SeedUser("push-status-4@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-status-4@five68.com");
+		_factory.SeedUser("push-status-4@five68.com", UserRole.Employee);
+		Guid userId = _factory.GetUserId("push-status-4@five68.com");
 		SeedSubscription(userId, NewEndpoint("status-4-off"), active: false);
 		SeedSubscription(userId, NewEndpoint("status-4-on"));
 
-		await client_.AuthorizeAsAsync(factory_, "push-status-4@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-status-4@five68.com");
 
 		(await GetStatusAsync()).Should().BeTrue();
 	}
@@ -453,8 +456,8 @@ public class TestPushController
 	[Fact]
 	public async Task Status_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
-		HttpResponseMessage response = await client_.GetAsync("/Push/status");
+		_client.DefaultRequestHeaders.Authorization = null;
+		HttpResponseMessage response = await _client.GetAsync("/Push/status");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -462,12 +465,12 @@ public class TestPushController
 	[Fact]
 	public async Task Status_ReflectsOnlyTheCallersSubscriptions()
 	{
-		factory_.SeedUser("push-status-5-a@five68.com", UserRole.Employee);
-		factory_.SeedUser("push-status-5-b@five68.com", UserRole.Employee);
-		Guid userA = factory_.GetUserId("push-status-5-a@five68.com");
+		_factory.SeedUser("push-status-5-a@five68.com", UserRole.Employee);
+		_factory.SeedUser("push-status-5-b@five68.com", UserRole.Employee);
+		Guid userA = _factory.GetUserId("push-status-5-a@five68.com");
 		SeedSubscription(userA, NewEndpoint("status-5"));
 
-		await client_.AuthorizeAsAsync(factory_, "push-status-5-b@five68.com");
+		await _client.AuthorizeAsAsync(_factory, "push-status-5-b@five68.com");
 
 		(await GetStatusAsync()).Should().BeFalse();
 	}
@@ -482,7 +485,7 @@ public class TestPushController
 	/// </summary>
 	private WebApplicationFactory<Program> CreateFactoryWithWebPush(string publicKey)
 	{
-		return factory_.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+		return _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
 			services.PostConfigure<AppSettings>(s => s.WebPush = new WebPushSettings
 			{
 				Enabled = true,
@@ -495,12 +498,12 @@ public class TestPushController
 	[Fact]
 	public async Task VapidPublicKey_Configured_ReturnsOnlyThePublicKey()
 	{
-		factory_.SeedUser("push-vapid-1@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-vapid-1@five68.com");
+		_factory.SeedUser("push-vapid-1@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-vapid-1@five68.com");
 
 		await using WebApplicationFactory<Program> pushFactory = CreateFactoryWithWebPush(VapidPublicKey);
 		HttpClient client = pushFactory.CreateClient();
-		client.DefaultRequestHeaders.Authorization = client_.DefaultRequestHeaders.Authorization;
+		client.DefaultRequestHeaders.Authorization = _client.DefaultRequestHeaders.Authorization;
 
 		HttpResponseMessage response = await client.GetAsync("/Push/vapid-public-key");
 
@@ -515,10 +518,10 @@ public class TestPushController
 	[Fact]
 	public async Task VapidPublicKey_WebPushDisabled_Returns404()
 	{
-		factory_.SeedUser("push-vapid-2@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-vapid-2@five68.com");
+		_factory.SeedUser("push-vapid-2@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-vapid-2@five68.com");
 
-		HttpResponseMessage response = await client_.GetAsync("/Push/vapid-public-key");
+		HttpResponseMessage response = await _client.GetAsync("/Push/vapid-public-key");
 
 		response.StatusCode.Should().Be(HttpStatusCode.NotFound);
 	}
@@ -526,12 +529,12 @@ public class TestPushController
 	[Fact]
 	public async Task VapidPublicKey_EnabledButKeyMissing_Returns404()
 	{
-		factory_.SeedUser("push-vapid-3@five68.com", UserRole.Employee);
-		await client_.AuthorizeAsAsync(factory_, "push-vapid-3@five68.com");
+		_factory.SeedUser("push-vapid-3@five68.com", UserRole.Employee);
+		await _client.AuthorizeAsAsync(_factory, "push-vapid-3@five68.com");
 
 		await using WebApplicationFactory<Program> pushFactory = CreateFactoryWithWebPush(string.Empty);
 		HttpClient client = pushFactory.CreateClient();
-		client.DefaultRequestHeaders.Authorization = client_.DefaultRequestHeaders.Authorization;
+		client.DefaultRequestHeaders.Authorization = _client.DefaultRequestHeaders.Authorization;
 
 		HttpResponseMessage response = await client.GetAsync("/Push/vapid-public-key");
 
@@ -541,8 +544,8 @@ public class TestPushController
 	[Fact]
 	public async Task VapidPublicKey_Unauthenticated_Returns401()
 	{
-		client_.DefaultRequestHeaders.Authorization = null;
-		HttpResponseMessage response = await client_.GetAsync("/Push/vapid-public-key");
+		_client.DefaultRequestHeaders.Authorization = null;
+		HttpResponseMessage response = await _client.GetAsync("/Push/vapid-public-key");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
@@ -553,11 +556,11 @@ public class TestPushController
 	public async Task CreateSwapRequest_EnqueuesPushForTargetAndSupervisors()
 	{
 		ClearSubscriptions();
-		Guid adminId = factory_.GetUserId(AdminEmail);
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("push-create-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("push-create-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 9, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid adminId = _factory.GetUserId(AdminEmail);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("push-create-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("push-create-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 9, 1), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
 		string targetEndpoint = NewEndpoint("create-target");
 		string adminEndpoint = NewEndpoint("create-admin");
@@ -570,8 +573,8 @@ public class TestPushController
 
 		await DrainQueueAsync();
 
-		await client_.AuthorizeAsAsync(factory_, "push-create-req@five68.com");
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		await _client.AuthorizeAsAsync(_factory, "push-create-req@five68.com");
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
@@ -589,10 +592,10 @@ public class TestPushController
 	public async Task CreateSwapRequest_InactiveSubscription_IsNotEnqueued()
 	{
 		ClearSubscriptions();
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("push-inactive-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("push-inactive-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 9, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("push-inactive-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("push-inactive-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 9, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
 		string activeEndpoint = NewEndpoint("inactive-target-on");
 		SeedSubscription(targetId, NewEndpoint("inactive-target-off"), active: false);
@@ -600,8 +603,8 @@ public class TestPushController
 
 		await DrainQueueAsync();
 
-		await client_.AuthorizeAsAsync(factory_, "push-inactive-req@five68.com");
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		await _client.AuthorizeAsAsync(_factory, "push-inactive-req@five68.com");
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
@@ -616,11 +619,11 @@ public class TestPushController
 	public async Task AcceptSwapRequest_EnqueuesPushForRequesterAndSupervisors()
 	{
 		ClearSubscriptions();
-		Guid adminId = factory_.GetUserId(AdminEmail);
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("push-accept-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("push-accept-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 9, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid adminId = _factory.GetUserId(AdminEmail);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("push-accept-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("push-accept-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 9, 3), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
 		string requesterEndpoint = NewEndpoint("accept-requester");
 		string adminEndpoint = NewEndpoint("accept-admin");
@@ -630,8 +633,8 @@ public class TestPushController
 		SeedSubscription(managerId, managerEndpoint);
 		SeedSubscription(targetId, NewEndpoint("accept-target"));
 
-		await client_.AuthorizeAsAsync(factory_, "push-accept-req@five68.com");
-		HttpResponseMessage created = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		await _client.AuthorizeAsAsync(_factory, "push-accept-req@five68.com");
+		HttpResponseMessage created = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
@@ -641,8 +644,8 @@ public class TestPushController
 
 		await DrainQueueAsync();
 
-		await client_.AuthorizeAsAsync(factory_, "push-accept-tgt@five68.com");
-		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requests![0].Id}/accept", null);
+		await _client.AuthorizeAsAsync(_factory, "push-accept-tgt@five68.com");
+		HttpResponseMessage response = await _client.PostAsync($"/SwapRequest/{requests![0].Id}/accept", null);
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		List<PushJob> jobs = await DrainQueueAsync();
@@ -656,11 +659,11 @@ public class TestPushController
 	public async Task RejectSwapRequest_EnqueuesPushForRequesterAndSupervisors()
 	{
 		ClearSubscriptions();
-		Guid adminId = factory_.GetUserId(AdminEmail);
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("push-reject-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("push-reject-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 9, 4), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid adminId = _factory.GetUserId(AdminEmail);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("push-reject-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("push-reject-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 9, 4), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
 		string requesterEndpoint = NewEndpoint("reject-requester");
 		string adminEndpoint = NewEndpoint("reject-admin");
@@ -670,8 +673,8 @@ public class TestPushController
 		SeedSubscription(managerId, managerEndpoint);
 		SeedSubscription(targetId, NewEndpoint("reject-target"));
 
-		await client_.AuthorizeAsAsync(factory_, "push-reject-req@five68.com");
-		HttpResponseMessage created = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		await _client.AuthorizeAsAsync(_factory, "push-reject-req@five68.com");
+		HttpResponseMessage created = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
@@ -681,8 +684,8 @@ public class TestPushController
 
 		await DrainQueueAsync();
 
-		await client_.AuthorizeAsAsync(factory_, "push-reject-tgt@five68.com");
-		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requests![0].Id}/reject", null);
+		await _client.AuthorizeAsAsync(_factory, "push-reject-tgt@five68.com");
+		HttpResponseMessage response = await _client.PostAsync($"/SwapRequest/{requests![0].Id}/reject", null);
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		List<PushJob> jobs = await DrainQueueAsync();
@@ -695,11 +698,11 @@ public class TestPushController
 	public async Task CancelSwapRequest_EnqueuesPushForTargetAndSupervisors()
 	{
 		ClearSubscriptions();
-		Guid adminId = factory_.GetUserId(AdminEmail);
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("push-cancel-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("push-cancel-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 9, 5), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid adminId = _factory.GetUserId(AdminEmail);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("push-cancel-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("push-cancel-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 9, 5), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
 		string targetEndpoint = NewEndpoint("cancel-target");
 		string adminEndpoint = NewEndpoint("cancel-admin");
@@ -709,8 +712,8 @@ public class TestPushController
 		SeedSubscription(managerId, managerEndpoint);
 		SeedSubscription(requesterId, NewEndpoint("cancel-requester"));
 
-		await client_.AuthorizeAsAsync(factory_, "push-cancel-req@five68.com");
-		HttpResponseMessage created = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		await _client.AuthorizeAsAsync(_factory, "push-cancel-req@five68.com");
+		HttpResponseMessage created = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
@@ -720,7 +723,7 @@ public class TestPushController
 
 		await DrainQueueAsync();
 
-		HttpResponseMessage response = await client_.PostAsync($"/SwapRequest/{requests![0].Id}/cancel", null);
+		HttpResponseMessage response = await _client.PostAsync($"/SwapRequest/{requests![0].Id}/cancel", null);
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		List<PushJob> jobs = await DrainQueueAsync();
@@ -733,15 +736,15 @@ public class TestPushController
 	public async Task SwapRequestLifecycle_NoSubscriptions_EnqueuesNothing()
 	{
 		ClearSubscriptions();
-		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("push-none-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("push-none-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 9, 6), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		Guid managerId = _factory.GetUserId(ManagerEmail);
+		Guid requesterId = _factory.CreateEmployee("push-none-req@five68.com");
+		Guid targetId = _factory.CreateEmployee("push-none-tgt@five68.com");
+		Guid shiftId = _factory.SeedShift(requesterId, new DateOnly(2031, 9, 6), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
 
 		await DrainQueueAsync();
 
-		await client_.AuthorizeAsAsync(factory_, "push-none-req@five68.com");
-		HttpResponseMessage response = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
+		await _client.AuthorizeAsAsync(_factory, "push-none-req@five68.com");
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
