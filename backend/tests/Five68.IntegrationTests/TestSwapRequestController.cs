@@ -113,7 +113,7 @@ public class TestSwapRequestController
 		response.StatusCode.Should().Be(HttpStatusCode.Created);
 		List<SwapRequestDTO>? created = await response.Content.ReadFromJsonAsync<List<SwapRequestDTO>>(_jsonOptions);
 		created.Should().HaveCount(2);
-		created!.Select(x => x.TargetEmployeeId).Should().BeEquivalentTo([targetB, targetC]);
+		created.Select(x => x.TargetEmployeeId).Should().BeEquivalentTo([targetB, targetC]);
 	}
 
 	[Fact]
@@ -845,7 +845,7 @@ public class TestSwapRequestController
 		List<SwapRequestDTO>? secondList = await secondPage.Content.ReadFromJsonAsync<List<SwapRequestDTO>>(_jsonOptions);
 		firstList.Should().HaveCount(2);
 		secondList.Should().HaveCount(2);
-		firstList!.Select(x => x.Id).Should().NotIntersectWith(secondList!.Select(x => x.Id));
+		firstList.Select(x => x.Id).Should().NotIntersectWith(secondList.Select(x => x.Id));
 	}
 
 	[Fact]
