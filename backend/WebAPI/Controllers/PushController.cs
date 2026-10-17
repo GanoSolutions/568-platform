@@ -1,7 +1,6 @@
 using Five68.Models.DTO;
 using Five68.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
@@ -58,7 +57,7 @@ namespace Five68.Controllers
 			return NoContent();
 		}
 
-		/// <summary>Disables one of the caller's push subscriptions. Idempotent.</summary>
+		/// <summary>Deletes one of the caller's push subscriptions. Idempotent</summary>
 		[HttpPost("unsubscribe")]
 		public async Task<IActionResult> Unsubscribe([FromBody] PushUnsubscribe model)
 		{
@@ -72,7 +71,11 @@ namespace Five68.Controllers
 			return NoContent();
 		}
 
-		/// <summary>Tells whether the caller has at least one active push subscription.</summary>
+		/// <summary>
+		/// Returns the caller's push subscription endpoint, if any. The client compares it with the
+		/// browser's own subscription to tell "active on this device" from "active on another device".
+		/// </summary>
+		/// <response code="200">{ active, endpoint } — endpoint is null when there is no subscription.</response>
 		[HttpGet("status")]
 		public async Task<IActionResult> Status()
 		{
@@ -82,7 +85,8 @@ namespace Five68.Controllers
 				return Unauthorized();
 			}
 
-			return Ok(new { active = await _service.HasActiveSubscription(userId) });
+			string endpoint = await _service.GetSubscribedEndpoint(userId);
+			return Ok(new { active = endpoint is not null, endpoint });
 		}
 
 		private Guid GetRequesterId()

@@ -1,14 +1,9 @@
 // usePushNotifications.ts
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { ApiError, pushApi } from '@/lib/apiClient';
 
-const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 const pushServiceWorkerPath = '/push-sw-v2.js';
-
-function isPlaceholder(value: string | undefined, placeholder: string): boolean {
-	return !value || value === placeholder;
-}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 	const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -23,7 +18,16 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 	return outputArray;
 }
 
-export const isWebPushConfigured = !isPlaceholder(vapidPublicKey, 'your-vapid-public-key-here');
+/** Invia al backend C# la subscription del browser corrente (già creata/esistente). */
+async function registerOnBackend(subscription: PushSubscription): Promise<void> {
+	const subscriptionJson = subscription.toJSON();
+	await pushApi.subscribe({
+		endpoint: subscription.endpoint,
+		p256dh: subscriptionJson.keys?.p256dh ?? '',
+		auth: subscriptionJson.keys?.auth ?? '',
+		userAgent: navigator.userAgent,
+	});
+}
 
 export function usePushNotifications() {
 	const { user } = useAuth();
@@ -31,6 +35,11 @@ export function usePushNotifications() {
 	const [enabled, setEnabled] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
+	// La chiave VAPID vive solo nel backend (issue #76 — prima andava rifatta la
+	// build Docker per cambiarla, ora si legge a runtime). null finché non è
+	// stata recuperata o se WebPush non è abilitato/configurato sul server (404).
+	const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+	const [vapidChecked, setVapidChecked] = useState(false);
 
 	useEffect(() => {
 		if (typeof Notification === 'undefined') {
@@ -42,29 +51,62 @@ export function usePushNotifications() {
 	}, []);
 
 	useEffect(() => {
-		if (!user || !isSupabaseConfigured || !supabase || !isWebPushConfigured) {
+		if (!user) {
+			setVapidPublicKey(null);
+			setVapidChecked(false);
+			return;
+		}
+
+		let mounted = true;
+
+		pushApi.vapidPublicKey()
+			.then(({ publicKey }) => { if (mounted) setVapidPublicKey(publicKey); })
+			.catch((e) => {
+				if (!mounted) return;
+				setVapidPublicKey(null);
+				// 404 = WebPush disabilitato/non configurato sul server, non un errore da mostrare.
+				if (!(e instanceof ApiError && e.status === 404)) {
+					setError((e as Error).message || 'Verifica configurazione notifiche non riuscita');
+				}
+			})
+			.finally(() => { if (mounted) setVapidChecked(true); });
+
+		return () => { mounted = false; };
+	}, [user]);
+
+	const availability = useMemo(() => {
+		if (!user) return 'signed-out';
+		if (!vapidChecked) return 'checking';
+		if (!vapidPublicKey) return 'vapid-missing';
+		if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+		return 'ready';
+	}, [user, vapidChecked, vapidPublicKey]);
+
+	// GET /push/status dice se l'utente ha almeno una subscription attiva su
+	// QUALSIASI dispositivo — va incrociato con la subscription di questo browser,
+	// altrimenti un utente iscritto dal telefono vedrebbe "attivo" anche sul PC
+	// dove non lo è mai stato.
+	useEffect(() => {
+		if (availability !== 'ready') {
 			setEnabled(false);
 			return;
 		}
 
-		const sb = supabase;
 		let mounted = true;
 
 		const loadSubscriptionState = async () => {
-			const { data, error: loadError } = await sb
-				.from('push_subscriptions')
-				.select('id')
-				.eq('profile_id', user.id)
-				.eq('active', true)
-				.limit(1);
-
-			if (!mounted) return;
-			if (loadError) {
-				setError(loadError.message);
-				return;
+			try {
+				const [status, registration] = await Promise.all([
+					pushApi.status(),
+					navigator.serviceWorker.getRegistration(pushServiceWorkerPath),
+				]);
+				const subscription = await registration?.pushManager.getSubscription();
+				if (!mounted) return;
+				setEnabled(status.active && !!subscription);
+			} catch (loadError) {
+				if (!mounted) return;
+				setError((loadError as Error).message || 'Verifica stato notifiche non riuscita');
 			}
-
-			setEnabled((data ?? []).length > 0);
 		};
 
 		loadSubscriptionState();
@@ -72,18 +114,10 @@ export function usePushNotifications() {
 		return () => {
 			mounted = false;
 		};
-	}, [user]);
-
-	const availability = useMemo(() => {
-		if (!user) return 'signed-out';
-		if (!isSupabaseConfigured) return 'supabase-missing';
-		if (!isWebPushConfigured) return 'vapid-missing';
-		if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
-		return 'ready';
-	}, [user]);
+	}, [availability]);
 
 	const enable = useCallback(async () => {
-		if (!user || availability !== 'ready' || !supabase) return;
+		if (availability !== 'ready' || !vapidPublicKey) return;
 
 		setLoading(true);
 		setError('');
@@ -116,16 +150,7 @@ export function usePushNotifications() {
 				});
 			}
 
-			const subscriptionJson = subscription.toJSON();
-
-			const { error: registerError } = await supabase.rpc('register_push_subscription', {
-				p_endpoint: subscription.endpoint,
-				p_p256dh: subscriptionJson.keys?.p256dh,
-				p_auth: subscriptionJson.keys?.auth,
-				p_user_agent: navigator.userAgent,
-			});
-
-			if (registerError) throw registerError;
+			await registerOnBackend(subscription);
 			setEnabled(true);
 		} catch (enableError) {
 			setError((enableError as Error).message || 'Attivazione notifiche non riuscita');
@@ -133,10 +158,10 @@ export function usePushNotifications() {
 		} finally {
 			setLoading(false);
 		}
-	}, [user, availability]);
+	}, [availability, vapidPublicKey]);
 
 	const registerIfGranted = useCallback(async () => {
-		if (!user || availability !== 'ready' || !supabase) return;
+		if (availability !== 'ready' || !vapidPublicKey) return;
 		if (Notification.permission !== 'granted') return;
 
 		setLoading(true);
@@ -157,27 +182,16 @@ export function usePushNotifications() {
 				});
 			}
 
-			const subscriptionJson = subscription.toJSON();
-
-			const { error: registerError } = await supabase.rpc('register_push_subscription', {
-				p_endpoint: subscription.endpoint,
-				p_p256dh: subscriptionJson.keys?.p256dh,
-				p_auth: subscriptionJson.keys?.auth,
-				p_user_agent: navigator.userAgent,
-			});
-
-			if (registerError) throw registerError;
+			await registerOnBackend(subscription);
 			setEnabled(true);
 		} catch (e) {
 			setError((e as Error)?.message || 'Registrazione subscription non riuscita');
 		} finally {
 			setLoading(false);
 		}
-	}, [user, availability]);
+	}, [availability, vapidPublicKey]);
 
 	const disable = useCallback(async () => {
-		if (!user || !isSupabaseConfigured || !supabase) return;
-
 		setLoading(true);
 		setError('');
 
@@ -187,12 +201,11 @@ export function usePushNotifications() {
 				const subscription = await registration?.pushManager.getSubscription();
 
 				if (subscription) {
-					const { error: disableError } = await supabase.rpc('disable_push_subscription', {
-						p_endpoint: subscription.endpoint,
-					});
-
-					if (disableError) throw disableError;
-
+					// Il logout forzato (refresh token scaduto) arriva qui con i token già
+					// azzerati: la unsubscribe lato backend va in 401. Disiscriviamo comunque
+					// il browser — il backend disattiva da solo le subscription scadute al
+					// prossimo invio (404/410 dal push service).
+					await pushApi.unsubscribe(subscription.endpoint).catch(() => { /* vedi sopra */ });
 					await subscription.unsubscribe();
 				}
 			}
@@ -204,23 +217,21 @@ export function usePushNotifications() {
 		} finally {
 			setLoading(false);
 		}
-	}, [user]);
+	}, []);
 
 	useEffect(() => {
-		const onAppLogout = () => {
-			try {
-				disable().catch(() => { /* ignore */ });
-			} catch {
-				// ignore
-			}
+		// app:logout porta nel detail un array `pending`: ci iscriviamo con la
+		// promise di disable() così AuthContext.logout() può aspettarla (con
+		// timeout breve) prima di cancellare i token — altrimenti la unsubscribe,
+		// che richiede ancora autenticazione, rischia di partire dopo che i token
+		// sono già stati azzerati (richiesto da Hermann, guida frontend PR #71).
+		const onAppLogout = (event: Event) => {
+			const detail = (event as CustomEvent<{ pending?: Promise<unknown>[] }>).detail;
+			detail?.pending?.push(disable().catch(() => { /* ignore */ }));
 		};
 
 		const onAppLogin = () => {
-			try {
-				registerIfGranted().catch(() => { /* ignore */ });
-			} catch {
-				// ignore
-			}
+			registerIfGranted().catch(() => { /* ignore */ });
 		};
 
 		window.addEventListener('app:logout', onAppLogout);
@@ -230,7 +241,7 @@ export function usePushNotifications() {
 			window.removeEventListener('app:logout', onAppLogout);
 			window.removeEventListener('app:login', onAppLogin);
 		};
-	}, [user, availability, disable, registerIfGranted]);
+	}, [disable, registerIfGranted]);
 
 	return {
 		availability,
