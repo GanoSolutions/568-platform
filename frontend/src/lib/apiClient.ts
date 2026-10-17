@@ -48,6 +48,7 @@ export interface Tokens {
 
 /** Mirror of the C# EmployeeDTO — dati anagrafici del dipendente. */
 export interface EmployeeDTO {
+	id: string;
 	name: string;
 	surname: string;
 	fiscalCode: string;
@@ -67,11 +68,14 @@ export interface UserDTO {
 	createdAt: string;
 }
 
-export interface UserRegisterPayload {
+/** Mirror of the C# EmployeeCreate — usato sia per la creazione che per l'update (stesso body). */
+export interface EmployeeCreatePayload {
+	name: string;
+	surname: string;
+	fiscalCode: string;
 	email: string;
-	fullName: string;
-	password: string;
-	role: UserRoleCode;
+	phone: string;
+	contractEnd: string | null;
 }
 
 /** Mirror of the C# ShiftDTO. `startTime` is "HH:mm:ss", `duration` is a .NET
@@ -84,6 +88,7 @@ export interface ShiftDTO {
 	duration: string;
 	createdBy: string;
 	createdAt: string;
+	updatedAt: string;
 }
 
 export interface ShiftCreatePayload {
@@ -96,6 +101,20 @@ export interface ShiftCreatePayload {
 export interface ShiftUpdatePayload {
 	startTime: string;
 	duration: string;
+}
+
+/** Mirror of the C# ShiftCopyWeek — dates as "YYYY-MM-DD". */
+export interface ShiftCopyWeekPayload {
+	sourceWeekMonday: string;
+	targetStartDate: string;
+	targetEndDate: string;
+}
+
+/** Mirror of the C# ShiftCopyWeekResult. */
+export interface ShiftCopyWeekResult {
+	created: number;
+	overwritten: number;
+	skippedClosedDays: number;
 }
 
 export interface ChangePasswordPayload {
@@ -170,7 +189,7 @@ export function clearTokens(): void {
 // Base URL
 // ---------------------------------------------------------------------------
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080';
+export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080';
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -287,8 +306,15 @@ async function extractErrorMessage(res: Response): Promise<string> {
 	const text = await res.text().catch(() => '');
 	if (!text) return 'Request failed';
 	try {
-		const parsed = JSON.parse(text) as { message?: unknown };
+		const parsed = JSON.parse(text) as { message?: unknown; errors?: Record<string, unknown> };
 		if (typeof parsed.message === 'string' && parsed.message) return parsed.message;
+		// Validazione automatica di [ApiController] sui DataAnnotation (es. [Phone], [MaxLength]):
+		// risponde con ValidationProblemDetails ({ errors: { Campo: ["msg", ...] } }), niente .message
+		// (segnalato da Hermann in review PR #68, mostrava il JSON grezzo).
+		if (parsed.errors && typeof parsed.errors === 'object') {
+			const messages = Object.values(parsed.errors).flat().filter((m): m is string => typeof m === 'string');
+			if (messages.length) return messages.join(' ');
+		}
 	} catch {
 		// Corpo non JSON: mostriamo il testo grezzo così com'è.
 	}
@@ -337,26 +363,41 @@ export const userApi = {
 
 	getAll: () => api.get<UserDTO[]>('/user'),
 
-	signup: (data: UserRegisterPayload) => api.post<void>('/user/signup', data),
-
 	invite: (id: string) => api.post<{ inviteToken: string }>(`/user/${id}/invite`),
+
+	/** Rigenera l'invito senza mandare l'email — solo il token, per costruire il link a mano. */
+	inviteLink: (id: string) => api.get<{ inviteToken: string }>(`/user/${id}/invite-link`),
 
 	acceptInvite: (token: string, password: string) =>
 		api.post<void>('/user/invite/accept', { token, password }),
 
 	changePassword: (payload: ChangePasswordPayload) =>
 		api.post<void>('/user/password', payload),
+
+	/** Soft-delete: Status=Disabled, rimuove dai turni futuri, revoca la sessione. */
+	delete: (id: string) => api.del<void>(`/user/${id}`),
+};
+
+export const employeeApi = {
+	create: (payload: EmployeeCreatePayload) => api.post<EmployeeDTO>('/employee', payload),
+
+	/** Stesso body della create — l'email vive su User ma si aggiorna da qui. */
+	update: (id: string, payload: EmployeeCreatePayload) => api.put<EmployeeDTO>(`/employee/${id}`, payload),
 };
 
 export const shiftApi = {
 	getByDateRange: (startDate: string, endDate: string) =>
 		api.get<ShiftDTO[]>(`/shift?startDate=${startDate}&endDate=${endDate}`),
 
+	getById: (id: string) => api.get<ShiftDTO>(`/shift/${id}`),
+
 	create: (payload: ShiftCreatePayload) => api.post<ShiftDTO>('/shift', payload),
 
 	update: (id: string, payload: ShiftUpdatePayload) => api.put<ShiftDTO>(`/shift/${id}`, payload),
 
 	del: (id: string) => api.del<void>(`/shift/${id}`),
+
+	copyWeek: (payload: ShiftCopyWeekPayload) => api.post<ShiftCopyWeekResult>('/shift/copy-week', payload),
 };
 
 /** Mirror of the C# ClosedDayDTO. */
@@ -368,4 +409,42 @@ export interface ClosedDayDTO {
 export const settingsApi = {
 	getClosedDaysByDateRange: (startDate: string, endDate: string) =>
 		api.get<ClosedDayDTO[]>(`/settings/closed-days?startDate=${startDate}&endDate=${endDate}`),
+};
+
+/** Mirror of the C# SwapRequestStatus enum — serialized as its numeric ordinal, not a string. */
+export type SwapRequestStatusDTO = 0 | 1 | 2 | 3;
+
+export const SwapRequestStatus = {
+	Pending: 0,
+	Accepted: 1,
+	Rejected: 2,
+	Cancelled: 3,
+} as const;
+
+/** Mirror of the C# SwapRequestDTO. Il turno è annidato (niente più N GET /shift lato client); requester/target employee restano bare id. */
+export interface SwapRequestDTO {
+	id: string;
+	shift: ShiftDTO;
+	requesterId: string;
+	targetEmployeeId: string;
+	status: SwapRequestStatusDTO;
+	createdAt: string;
+	respondedAt: string | null;
+}
+
+export interface SwapRequestCreatePayload {
+	shiftId: string;
+	targetEmployeeIds: string[];
+}
+
+export const swapRequestApi = {
+	getPending: () => api.get<SwapRequestDTO[]>('/swaprequest/pending'),
+
+	create: (payload: SwapRequestCreatePayload) => api.post<SwapRequestDTO[]>('/swaprequest', payload),
+
+	accept: (id: string) => api.post<SwapRequestDTO>(`/swaprequest/${id}/accept`),
+
+	reject: (id: string) => api.post<SwapRequestDTO>(`/swaprequest/${id}/reject`),
+
+	cancel: (id: string) => api.post<SwapRequestDTO>(`/swaprequest/${id}/cancel`),
 };

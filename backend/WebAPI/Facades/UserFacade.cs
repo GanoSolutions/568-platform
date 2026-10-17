@@ -12,10 +12,20 @@ public class UserFacade
 		_context = context;
 	}
 
-	internal async Task CreateAsync(User user)
+	internal async Task<User> CreateAsync(string email, UserRole role, UserStatus status, string? passwordHash = null)
 	{
+		User user = new()
+		{
+			Id = Guid.NewGuid(),
+			Email = email,
+			Role = role,
+			Status = status,
+			PasswordHash = passwordHash,
+		};
+
 		await _context.Users.AddAsync(user);
 		await _context.SaveChangesAsync();
+		return user;
 	}
 
 	internal async Task UpdateAsync(User user)
@@ -55,4 +65,11 @@ public class UserFacade
 		return await _context.Users.CountAsync();
 	}
 
+	internal async Task<IEnumerable<User>> GetByRolesAsync(params UserRole[] roles)
+	{
+		return await _context.Users
+			.AsNoTracking()
+			.Where(x => roles.Contains(x.Role))
+			.ToListAsync();
+	}
 }

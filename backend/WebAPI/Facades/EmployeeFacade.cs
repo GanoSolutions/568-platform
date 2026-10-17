@@ -30,4 +30,16 @@ public class EmployeeFacade
 	{
 		return await _context.Employees.FirstOrDefaultAsync(x => x.UserId == userId);
 	}
+
+	internal async Task<IEnumerable<Employee>> GetAllAsync()
+	{
+		return await _context.Employees
+			.Where(x => _context.Users.Any(u => u.Id == x.UserId && u.Status != UserStatus.Disabled))
+			.ToListAsync();
+	}
+
+	internal async Task<Employee?> FindByFiscalCodeAsync(string fiscalCode)
+	{
+		return await _context.Employees.FirstOrDefaultAsync(x => x.FiscalCode == fiscalCode);
+	}
 }

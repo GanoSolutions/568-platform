@@ -17,6 +17,7 @@ public class Five68DbContext : DbContext
 	public DbSet<Shift> Shifts => Set<Shift>();
 	public DbSet<SwapRequest> SwapRequests => Set<SwapRequest>();
 	public DbSet<UserRefreshTokens> RefreshTokens => Set<UserRefreshTokens>();
+	public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		base.OnModelCreating(modelBuilder);
@@ -30,7 +31,7 @@ public class Five68DbContext : DbContext
 			e.HasIndex(x => x.Email).IsUnique();
 			e.HasIndex(x => x.InviteToken).IsUnique();
 			e.HasOne(x => x.Employee)
-				.WithOne(x => x.User)
+					.WithOne()
 				.HasForeignKey<Employee>(x => x.UserId)
 				.OnDelete(DeleteBehavior.Cascade);
 		});
@@ -50,10 +51,10 @@ public class Five68DbContext : DbContext
 			e.Property(x => x.Id).ValueGeneratedNever();
 			e.HasIndex(x => x.Date).IsUnique();
 
-			e.HasOne(x => x.Creator)
-				.WithMany()
-				.HasForeignKey(x => x.CreatedBy)
-				.OnDelete(DeleteBehavior.SetNull);
+			e.HasOne<User>()
+			.WithMany()
+			.HasForeignKey(x => x.CreatedBy)
+			.OnDelete(DeleteBehavior.SetNull);
 		});
 
 		modelBuilder.Entity<Shift>(e =>
@@ -63,15 +64,15 @@ public class Five68DbContext : DbContext
 			e.Property(x => x.Id).ValueGeneratedNever();
 			e.HasIndex(x => new { x.Date, x.EmployeeId }).IsUnique();
 
-			e.HasOne(x => x.Creator)
-				.WithMany()
-				.HasForeignKey(x => x.CreatedBy)
-				.OnDelete(DeleteBehavior.SetNull);
+			e.HasOne<User>()
+			.WithMany()
+			.HasForeignKey(x => x.CreatedBy)
+			.OnDelete(DeleteBehavior.SetNull);
 
-			e.HasOne(x => x.Employee)
-				.WithMany()
-				.HasForeignKey(x => x.EmployeeId)
-				.OnDelete(DeleteBehavior.Cascade);
+			e.HasOne<Employee>()
+			.WithMany()
+			.HasForeignKey(x => x.EmployeeId)
+			.OnDelete(DeleteBehavior.Cascade);
 		});
 
 		modelBuilder.Entity<SwapRequest>(e =>
@@ -86,15 +87,15 @@ public class Five68DbContext : DbContext
 				.HasForeignKey(x => x.ShiftId)
 				.OnDelete(DeleteBehavior.Cascade);
 
-			e.HasOne(x => x.Requester)
-				.WithMany()
-				.HasForeignKey(x => x.RequesterId)
-				.OnDelete(DeleteBehavior.Cascade);
+			e.HasOne<User>()
+			.WithMany()
+			.HasForeignKey(x => x.RequesterId)
+			.OnDelete(DeleteBehavior.Cascade);
 
-			e.HasOne(x => x.TargetEmployee)
-				.WithMany()
-			 	.HasForeignKey(x => x.TargetEmployeeId)
-				.OnDelete(DeleteBehavior.Cascade);
+			e.HasOne<User>()
+			.WithMany()
+			 .HasForeignKey(x => x.TargetEmployeeId)
+			.OnDelete(DeleteBehavior.Cascade);
 		});
 
 		modelBuilder.Entity<UserRefreshTokens>(e =>
@@ -102,8 +103,21 @@ public class Five68DbContext : DbContext
 			e.ToTable("t_refresh_tokens");
 			e.HasKey(x => x.Id);
 			e.Property(x => x.Id).ValueGeneratedOnAdd();
-			e.HasIndex(x => x.Email);
+			e.HasIndex(x => x.UserId);
+		});
+
+		modelBuilder.Entity<PushSubscription>(e =>
+		{
+			e.ToTable("t_push_subscriptions");
+			e.HasKey(x => x.Id);
+			e.Property(x => x.Id).ValueGeneratedNever();
+			e.HasIndex(x => x.Endpoint).IsUnique();
+			e.HasIndex(x => x.UserId);
+
+			e.HasOne<User>()
+				.WithMany()
+				.HasForeignKey(x => x.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
 		});
 	}
-
 }

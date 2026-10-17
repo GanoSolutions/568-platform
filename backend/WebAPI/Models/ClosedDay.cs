@@ -6,5 +6,4 @@ public class ClosedDay
 	public required DateOnly Date { get; set; }
 	public Guid? CreatedBy { get; set; }
 	public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-	public User Creator { get; set; } = null!;
 }

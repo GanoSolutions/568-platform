@@ -11,14 +11,9 @@ public class AuthService
 	private readonly UserService _userService;
 	private readonly JwtService _jwtService;
 	private readonly RefreshTokenFacade _refreshTokenFacade;
-	private readonly ILogger _logger;
+	private readonly ILogger<AuthService> _logger;
 
-	public AuthService(
-		UserService userService,
-		JwtService jwtService,
-		RefreshTokenFacade refreshTokenFacade,
-		ILogger<AuthService> logger
-		)
+	public AuthService(UserService userService, JwtService jwtService, RefreshTokenFacade refreshTokenFacade, ILogger<AuthService> logger)
 	{
 		_userService = userService;
 		_jwtService = jwtService;
@@ -45,11 +40,11 @@ public class AuthService
 		await _refreshTokenFacade.UpsertUserRefreshTokens(new UserRefreshTokens
 		{
 			RefreshToken = token.RefreshToken,
-			Email = user.Email,
+			UserId = user.Id,
 			ExpirationDate = DateTime.UtcNow + TimeSpan.FromDays(1)
 		});
 
-		_logger.LogInformation("User {UserId} ({Email}) logged in successfully", user.Id, user.Email);
+		_logger.LogInformation("User {UserId} ({UserEmail}) has logged in", user.Id, user.Email);
 
 		return token;
 	}
@@ -65,7 +60,13 @@ public class AuthService
 			throw new UnauthorizedException("Token non valido");
 		}
 
-		UserRefreshTokens? savedRefreshToken = await _refreshTokenFacade.ConsumeRefreshToken(email);
+		User? u = await _userService.Get(id);
+		if (u is null || u.Status != UserStatus.Active)
+		{
+			throw new UnauthorizedException("Account non attivo");
+		}
+
+		UserRefreshTokens? savedRefreshToken = await _refreshTokenFacade.ConsumeRefreshToken(id);
 		if (savedRefreshToken is null || savedRefreshToken.RefreshToken != token.RefreshToken || savedRefreshToken.ExpirationDate < DateTime.UtcNow)
 		{
 			throw new UnauthorizedException("Refresh token non valido o scaduto");
@@ -75,19 +76,16 @@ public class AuthService
 		await _refreshTokenFacade.UpsertUserRefreshTokens(new UserRefreshTokens
 		{
 			RefreshToken = newTokens.RefreshToken,
-			Email = email,
+			UserId = id,
 			ExpirationDate = DateTime.UtcNow.AddDays(1),
 		});
-
-		_logger.LogInformation("Refreshed tokens for user {UserId} ({Email})", id, email);
 
 		return newTokens;
 	}
 
-	public async Task Logout(string email)
+	public async Task Logout(Guid userId)
 	{
-		await _refreshTokenFacade.DeleteUserRefreshTokens(email);
-		_logger.LogInformation("User {Email} logged out", email);
+		await _refreshTokenFacade.DeleteUserRefreshTokens(userId);
 	}
 
 }

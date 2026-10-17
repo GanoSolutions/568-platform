@@ -32,6 +32,7 @@ function makeUser(overrides = {}) {
 		name: 'Test User',
 		email: 'test@example.com',
 		role: 'employee' as const,
+		isAdmin: false,
 		color: '#6366f1',
 		firstLoginCompleted: true,
 		...overrides,

@@ -1,6 +1,7 @@
 // useCalendar.ts
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { settingsApi, shiftApi, type ShiftDTO } from '@/lib/apiClient';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { settingsApi, shiftApi, type ShiftCopyWeekResult, type ShiftDTO } from '@/lib/apiClient';
+import { getAppHubConnection } from '@/lib/realtime';
 import { computeDuration, toBackendTime, toDisplayRange } from '@/lib/shiftTime';
 import type { ShiftData, ShiftEmployee } from '@/types';
 
@@ -15,17 +16,16 @@ function getMondayOfWeek(date: Date): Date {
 	return d;
 }
 
-function addDays(date: Date, amount: number): Date {
-	const next = new Date(date);
-	next.setDate(next.getDate() + amount);
-	return next;
-}
-
 export function formatDateKey(date: Date): string {
 	const y = date.getFullYear();
 	const m = String(date.getMonth() + 1).padStart(2, '0');
 	const d = String(date.getDate()).padStart(2, '0');
 	return `${y}-${m}-${d}`;
+}
+
+/** True se `date` (confrontata a livello di giorno, ignorando l'ora) è prima di oggi. */
+export function isPastDay(date: Date): boolean {
+	return formatDateKey(date) < formatDateKey(new Date());
 }
 
 export function getWeekNumber(date: Date): number {
@@ -54,12 +54,35 @@ function groupShiftsByDate(dtos: ShiftDTO[]): ShiftsMap {
 	}, {});
 }
 
+/**
+ * Ultima settimana visualizzata, ricordata a livello di modulo così sopravvive
+ * allo smontaggio di Calendar quando si naviga su un'altra pagina e si torna
+ * indietro (issue #53). Un refresh della pagina ricarica il modulo da zero e
+ * quindi la resetta volutamente: nessuna persistenza in sessionStorage/localStorage.
+ */
+let rememberedMonday: Date | null = null;
+
+/**
+ * Closed days per settimana (chiave "start_end"), condivisa a livello di modulo:
+ * cambiano di rado (li tocca solo un admin) e rimontare Calendar sulla stessa
+ * settimana (es. tornandoci da un'altra pagina) non deve rifare la stessa GET
+ * /settings/closed-days (segnalato da Hermann in review su PR #49). Gli shift
+ * invece cambiano spesso e restano sempre fetchati al mount, senza cache.
+ * ponytail: nessuna invalidazione perché oggi non c'è UI per modificare i
+ * closed days dal frontend — se arriva, va svuotata la voce toccata qui.
+ */
+const closedDaysCache = new Map<string, Set<string>>();
+
 export function useCalendar() {
-	const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()));
+	const [currentMonday, setCurrentMonday] = useState(() => rememberedMonday ?? getMondayOfWeek(new Date()));
 	const [shifts, setShifts] = useState<ShiftsMap>({});
 	const [closedDays, setClosedDays] = useState<Set<string>>(new Set());
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
+
+	useEffect(() => {
+		rememberedMonday = currentMonday;
+	}, [currentMonday]);
 
 	const weekDays = Array.from({ length: 7 }, (_, i) => {
 		const d = new Date(currentMonday);
@@ -77,27 +100,87 @@ export function useCalendar() {
 		const d = new Date(prev); d.setDate(d.getDate() + 7); return d;
 	});
 
-	const reloadCalendar = useCallback(async () => {
-		setLoading(true);
+	const goToToday = () => setCurrentMonday(getMondayOfWeek(new Date()));
+	const isCurrentWeek = formatDateKey(currentMonday) === formatDateKey(getMondayOfWeek(new Date()));
+
+	// Contatore di richiesta: se si cambia settimana più volte prima che una
+	// fetch precedente sia tornata, questo scarta il risultato di quella
+	// obsoleta invece di lasciarla sovrascrivere lo stato con dati di una
+	// settimana che non è più quella visualizzata.
+	const requestIdRef = useRef(0);
+
+	const fetchShifts = useCallback(
+		() => shiftApi.getByDateRange(weekRange.start, weekRange.end),
+		[weekRange.start, weekRange.end],
+	);
+
+	const fetchClosedDays = useCallback(async () => {
+		const cacheKey = `${weekRange.start}_${weekRange.end}`;
+		const cached = closedDaysCache.get(cacheKey);
+		if (cached) return cached;
+
+		const dtos = await settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end);
+		const set = new Set(dtos.map(d => d.date));
+		closedDaysCache.set(cacheKey, set);
+		return set;
+	}, [weekRange.start, weekRange.end]);
+
+	const reloadShifts = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		const requestId = ++requestIdRef.current;
+		if (!silent) setLoading(true);
 		setError('');
 
 		try {
-			const [dtos, closedDayDtos] = await Promise.all([
-				shiftApi.getByDateRange(weekRange.start, weekRange.end),
-				settingsApi.getClosedDaysByDateRange(weekRange.start, weekRange.end),
-			]);
-			setShifts(groupShiftsByDate(dtos));
-			setClosedDays(new Set(closedDayDtos.map(d => d.date)));
+			const dtos = await fetchShifts();
+			if (requestId !== requestIdRef.current) return;
+			setShifts(groupShiftsByDate(await dtos));
 		} catch (loadError) {
+			if (requestId !== requestIdRef.current) return;
 			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
 		} finally {
-			setLoading(false);
+			if (requestId === requestIdRef.current && !silent) setLoading(false);
 		}
-	}, [weekRange.start, weekRange.end]);
+	}, [fetchShifts]);
+
+	const reloadCalendar = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+		const requestId = ++requestIdRef.current;
+		if (!silent) setLoading(true);
+		setError('');
+
+		try {
+			const [dtos, closedDaySet] = await Promise.all([fetchShifts(), fetchClosedDays()]);
+			if (requestId !== requestIdRef.current) return;
+			setShifts(groupShiftsByDate(dtos));
+			setClosedDays(closedDaySet);
+		} catch (loadError) {
+			if (requestId !== requestIdRef.current) return;
+			setError(loadError instanceof Error ? loadError.message : 'Caricamento calendario non riuscito');
+		} finally {
+			if (requestId === requestIdRef.current && !silent) setLoading(false);
+		}
+	}, [fetchShifts, fetchClosedDays]);
 
 	useEffect(() => {
 		reloadCalendar();
 	}, [reloadCalendar]);
+
+	// Canale live: la connessione è di proprietà di RequestsContext (avvio/stop),
+	// qui ci si limita a sottoscrivere/annullare la sottoscrizione all'evento.
+	// ShiftsChanged porta la data del turno modificato: rifacciamo il fetch degli
+	// shift solo se ricade nella settimana visualizzata (altrimenti nulla è cambiato
+	// nel range che stiamo mostrando). I closed days non sono toccati da questo
+	// evento, quindi non li rifetchiamo qui: restano quelli caricati con la settimana.
+	useEffect(() => {
+		const connection = getAppHubConnection();
+		connection.on('ShiftsChanged', (payload: { date: string }) => {
+			if (payload.date >= weekRange.start && payload.date <= weekRange.end) {
+				reloadShifts({ silent: true });
+			}
+		});
+		return () => {
+			connection.off('ShiftsChanged');
+		};
+	}, [reloadShifts, weekRange.start, weekRange.end]);
 
 	const getShiftForDay = (date: Date): ShiftData | null => {
 		const key = formatDateKey(date);
@@ -155,55 +238,20 @@ export function useCalendar() {
 
 	/**
 	 * Copia i turni della settimana visibile su ogni settimana nell'intervallo
-	 * scelto. Un fallimento su un singolo turno (es. 422 perché il dipendente è
-	 * già assegnato quel giorno) non blocca gli altri: viene raccolto e segnalato
-	 * in coda dopo aver comunque applicato tutto il resto.
+	 * scelto. L'operazione (lettura della settimana sorgente, validazione,
+	 * sovrascrittura) è tutta lato backend (`POST /shift/copy-week`, atomica);
+	 * qui si passa solo il lunedì visualizzato come sorgente e si ricarica la
+	 * settimana corrente dopo, per riflettere eventuali turni sovrascritti.
 	 */
-	const copyWeek = async ({ startDate, endDate }: { startDate: string; endDate: string }) => {
-		const sourceWeek = weekDays.map((day) => ({
-			date: new Date(day),
-			shift: getShiftForDay(day),
-		}));
-
-		const startMonday = getMondayOfWeek(new Date(startDate));
-		const endMonday = getMondayOfWeek(new Date(endDate));
-
-		if (endMonday < startMonday) {
-			throw new Error('Periodo non valido per la copia settimana');
-		}
-
+	const copyWeek = async ({ startDate, endDate }: { startDate: string; endDate: string }): Promise<ShiftCopyWeekResult> => {
 		setError('');
-		const failures: string[] = [];
-
-		for (let monday = new Date(startMonday); monday <= endMonday; monday = addDays(monday, 7)) {
-			for (let index = 0; index < sourceWeek.length; index += 1) {
-				const sourceDay = sourceWeek[index];
-				const targetDate = addDays(monday, index);
-				const targetKey = formatDateKey(targetDate);
-
-				if (targetKey === formatDateKey(sourceDay.date)) continue;
-				if (!sourceDay.shift || sourceDay.shift.closed) continue;
-
-				for (const employee of sourceDay.shift.employees) {
-					try {
-						await shiftApi.create({
-							employeeId: employee.id,
-							date: targetKey,
-							startTime: toBackendTime(employee.startTime),
-							duration: computeDuration(employee.startTime, employee.endTime),
-						});
-					} catch (copyError) {
-						failures.push(`${targetKey}: ${copyError instanceof Error ? copyError.message : 'errore sconosciuto'}`);
-					}
-				}
-			}
-		}
-
+		const result = await shiftApi.copyWeek({
+			sourceWeekMonday: formatDateKey(currentMonday),
+			targetStartDate: startDate,
+			targetEndDate: endDate,
+		});
 		await reloadCalendar();
-
-		if (failures.length > 0) {
-			throw new Error(`Alcuni turni non sono stati copiati:\n${failures.join('\n')}`);
-		}
+		return result;
 	};
 
 	return {
@@ -211,6 +259,8 @@ export function useCalendar() {
 		currentMonday,
 		goToPrevWeek,
 		goToNextWeek,
+		goToToday,
+		isCurrentWeek,
 		getShiftForDay,
 		saveShift,
 		copyWeek,

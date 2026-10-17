@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useCalendar, getWeekNumber } from '@/hooks/useCalendar';
 import { useEmployees } from '@/hooks/useEmployees';
+import { showErrorToast, showSuccessToast } from '@/lib/toast';
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import CopyWeekModal from '@/components/modals/CopyWeekModal';
 import ShiftModal from '@/components/modals/ShiftModal';
@@ -13,12 +14,15 @@ const MONTHS = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
 
 export default function Calendar() {
 	const { user } = useAuth();
-	const { pendingShiftIds, createSwapRequest } = useRequests();
+	const { pendingShiftIds, createSwapRequest, requests } = useRequests();
+	const pendingRequests = requests.filter(r => r.status === 'pending');
 	const {
 		weekDays,
 		currentMonday,
 		goToPrevWeek,
 		goToNextWeek,
+		goToToday,
+		isCurrentWeek,
 		getShiftForDay,
 		saveShift,
 		copyWeek,
@@ -38,6 +42,12 @@ export default function Calendar() {
 	const closeShiftModal = () => {
 		setSelectedDay(null);
 		setSelectedEmployeeId(undefined);
+		setActionError('');
+	};
+
+	const closeCopyWeekModal = () => {
+		setCopyWeekOpen(false);
+		setActionError('');
 	};
 
 	const month = MONTHS[currentMonday.getMonth()];
@@ -45,6 +55,18 @@ export default function Calendar() {
 	const weekNum = getWeekNumber(currentMonday);
 
 	const selectedShift = selectedDay ? getShiftForDay(selectedDay) : null;
+
+	// Errori di caricamento pagina (background/silenziosi, es. reload triggerato dal
+	// websocket): non sono azionabili dall'utente, quindi un toast che si auto-chiude
+	// è più corretto di un banner fisso. Gli errori delle azioni (actionError) restano
+	// invece nella rispettiva modale, dove l'utente deve vederli finché non corregge.
+	useEffect(() => {
+		if (calendarError) showErrorToast(calendarError);
+	}, [calendarError]);
+
+	useEffect(() => {
+		if (employeesError) showErrorToast(employeesError);
+	}, [employeesError]);
 
 	const handleSaveShift = async (entries: { employeeId: string; startTime: string; endTime: string }[]) => {
 		setActionError('');
@@ -71,8 +93,10 @@ export default function Calendar() {
 	const handleCopyWeek = async (payload: { startDate: string; endDate: string }) => {
 		setActionError('');
 		try {
-			await copyWeek(payload);
-			setCopyWeekOpen(false);
+			const result = await copyWeek(payload);
+			closeCopyWeekModal();
+			const skippedLabel = result.skippedClosedDays > 0 ? `, ${result.skippedClosedDays} saltati (chiusura)` : '';
+			showSuccessToast(`Copia completata: ${result.created} creati, ${result.overwritten} sovrascritti${skippedLabel}`);
 		} catch (copyError) {
 			setActionError((copyError as Error).message || 'Copia settimana non riuscita');
 			throw copyError;
@@ -95,14 +119,24 @@ export default function Calendar() {
 					<p className="font-bold text-slate-800">{month} {year}</p>
 					<p className="text-xs text-slate-400 mt-0.5">Settimana {weekNum}</p>
 				</div>
-				<button
-					onClick={goToNextWeek}
-					className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition"
-				>
-					<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-					</svg>
-				</button>
+				<div className="flex items-center gap-1">
+					{!isCurrentWeek && (
+						<button
+							onClick={goToToday}
+							className="rounded-xl px-3 h-9 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 transition"
+						>
+							Oggi
+						</button>
+					)}
+					<button
+						onClick={goToNextWeek}
+						className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition"
+					>
+						<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+						</svg>
+					</button>
+				</div>
 			</div>
 
 			{user?.role === 'admin' && (
@@ -116,12 +150,6 @@ export default function Calendar() {
 						</svg>
 						Copia settimana
 					</button>
-				</div>
-			)}
-
-			{(calendarError || employeesError || actionError) && (
-				<div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{actionError || calendarError || employeesError}
 				</div>
 			)}
 
@@ -147,7 +175,7 @@ export default function Calendar() {
 				<CopyWeekModal
 					currentMonday={currentMonday}
 					onSubmit={handleCopyWeek}
-					onClose={() => setCopyWeekOpen(false)}
+					onClose={closeCopyWeekModal}
 					submitError={actionError}
 				/>
 			)}
@@ -171,6 +199,7 @@ export default function Calendar() {
 					shift={selectedShift}
 					employees={employees}
 					currentUser={user}
+					pendingRequests={pendingRequests}
 					onClose={closeShiftModal}
 					onSubmit={handleSwapRequest}
 					submitError={actionError}

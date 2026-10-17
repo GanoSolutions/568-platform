@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { RequestsProvider } from '@/context/RequestsContext';
+import Toaster from '@/components/Toaster';
 import Login from '@/pages/Login';
 import Calendar from '@/pages/Calendar';
 import Employees from '@/pages/Employees';
@@ -38,8 +39,8 @@ function AppRoutes() {
 					: user.firstLoginCompleted
 						? <Navigate to="/calendar" replace />
 						: <Navigate to="/set-password" replace />
-				} />
-				<Route
+			} />
+			<Route
 				path="/set-password"
 				element={
 					user?.firstLoginCompleted
@@ -81,6 +82,7 @@ export default function App() {
 			<AuthProvider>
 				<RequestsProvider>
 					<AppRoutes />
+					<Toaster />
 				</RequestsProvider>
 			</AuthProvider>
 		</BrowserRouter>

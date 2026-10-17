@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { formatDateKey } from '@/hooks/useCalendar';
 import { formatTimeLabel } from '@/lib/shiftTime';
 import type { AppUser, Employee, ShiftData } from '@/types';
 
@@ -13,14 +14,19 @@ interface CalendarGridProps {
 	onPressDay: (date: Date, employeeId?: string) => void
 }
 
-function isDayClickable(shift: ShiftData | null, currentUser: AppUser | null): boolean {
+// Il backend rifiuta già una swap request su un turno passato (issue #52); qui
+// evitiamo pure di dare all'employee la possibilità di aprirne la modale — resta
+// aperta per l'admin, che può ancora editare turni passati (issue #64, deciso a parte).
+function isDayClickable(shift: ShiftData | null, currentUser: AppUser | null, isPast: boolean): boolean {
 	if (shift?.closed) return false;
 	if (currentUser?.role === 'admin') return true;
+	if (isPast) return false;
 	return currentUser?.role === 'employee' && (shift?.employees?.some(e => e.id === currentUser.id) ?? false);
 }
 
 export default function CalendarGrid({ weekDays, employees, getShiftForDay, currentUser, pendingShiftIds, onPressDay }: CalendarGridProps) {
 	const today = new Date();
+	const todayKey = formatDateKey(today);
 
 	return (
 		<div className="overflow-auto bg-white">
@@ -50,7 +56,8 @@ export default function CalendarGrid({ weekDays, employees, getShiftForDay, curr
 					const shift = getShiftForDay(day);
 					const isClosed = shift?.closed === true;
 					const isToday = day.toDateString() === today.toDateString();
-					const clickable = isDayClickable(shift, currentUser);
+					const isPast = formatDateKey(day) < todayKey;
+					const clickable = isDayClickable(shift, currentUser, isPast);
 					const dayBg = isClosed ? 'bg-slate-200' : isToday ? 'bg-indigo-50' : 'bg-white';
 
 					return (

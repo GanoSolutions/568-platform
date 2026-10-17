@@ -10,15 +10,29 @@ namespace Five68.Services;
 public class UserService
 {
 	private readonly UserFacade _userFacade;
-	private readonly EmployeeFacade _employeeFacade;
+	private readonly ShiftFacade _shiftFacade;
+	private readonly TransactionFacade _transactionFacade;
+	private readonly RefreshTokenFacade _refreshTokenFacade;
+	private readonly AuthUtils _authUtils;
 	private readonly UserUtils _userUtils;
-	private readonly INotificationService _notificationService;
+	private readonly IInviteService _notificationService;
 	private readonly ILogger _logger;
 
-	public UserService(UserFacade userFacade, EmployeeFacade employeeFacade, UserUtils userUtils, INotificationService notificationService, ILogger<UserService> logger)
+	public UserService(
+		UserFacade userFacade,
+		ShiftFacade shiftFacade,
+		TransactionFacade transactionFacade,
+		RefreshTokenFacade refreshTokenFacade,
+		AuthUtils authUtils,
+		UserUtils userUtils,
+		IInviteService notificationService,
+		ILogger<UserService> logger)
 	{
 		_userFacade = userFacade;
-		_employeeFacade = employeeFacade;
+		_shiftFacade = shiftFacade;
+		_transactionFacade = transactionFacade;
+		_refreshTokenFacade = refreshTokenFacade;
+		_authUtils = authUtils;
 		_userUtils = userUtils;
 		_notificationService = notificationService;
 		_logger = logger;
@@ -56,7 +70,24 @@ public class UserService
 		return (await _userFacade.GetAll()).Select(u => UserDTO.FromUser(u)!);
 	}
 
-	public async Task<string> GenerateInvite(Guid userId, Guid requesterId)
+	public async Task<string> GenerateInvite(Guid userId, Guid requesterId, bool sendEmail)
+	{
+		(User requester, User user, string token) = await CreateInviteToken(userId, requesterId);
+
+		if (sendEmail)
+		{
+			await _notificationService.SendInviteAsync(user.Email, token);
+			_logger.LogInformation("User {RequesterId} ({RequesterEmail}) invited {UserId} ({UserEmail}) to change password", requester.Id, requester.Email, user.Id, user.Email);
+		}
+		else
+		{
+			_logger.LogInformation("User {RequesterId} ({RequesterEmail}) generated an invite link for {UserId} ({UserEmail}) without sending an email", requester.Id, requester.Email, user.Id, user.Email);
+		}
+
+		return token;
+	}
+
+	private async Task<(User requester, User user, string token)> CreateInviteToken(Guid userId, Guid requesterId)
 	{
 		User requester = await _userFacade.FindByIdAsync(requesterId) ?? throw new UnauthorizedException();
 
@@ -66,6 +97,12 @@ public class UserService
 		}
 
 		User user = await _userFacade.FindByIdAsync(userId) ?? throw new NotFoundException("Utente non trovato");
+
+		if (user.Status != UserStatus.Pending)
+		{
+			throw new EntityException("Si può generare un invito solo per un account in stato Pending");
+		}
+
 		string token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
 		user.Status = UserStatus.Pending;
@@ -73,9 +110,28 @@ public class UserService
 		user.InviteTokenExpiry = DateTime.UtcNow.AddDays(7);
 
 		await _userFacade.UpdateAsync(user);
-		await _notificationService.SendInviteAsync(user.Email, token);
-		_logger.LogInformation("User {RequesterEmail} invited {UserEmail} to change password", requester.Email, user.Email);
-		return token;
+
+		return (requester, user, token);
+	}
+
+	public async Task Delete(Guid id, Guid requesterId)
+	{
+		User requester = await _authUtils.RequireManagerOrAdmin(requesterId);
+		User user = await _userFacade.FindByIdAsync(id) ?? throw new NotFoundException("Utente non trovato");
+
+		// Soft-delete: NON si cancella la riga User/Employee (cascaderebbe su Shift/SwapRequest
+		// storici, vedi Five68DbContext.cs OnDelete=Cascade su quelle FK). Si disabilita
+		// l'account e si rimuove solo dalle giornate future, come richiesto dallo spec.
+		user.Status = UserStatus.Disabled;
+
+		await _transactionFacade.ExecuteAsync(async () =>
+		{
+			await _userFacade.UpdateAsync(user);
+			await _shiftFacade.DeleteFutureAssignmentsForEmployeeAsync(id, DateOnly.FromDateTime(DateTime.UtcNow));
+			await _refreshTokenFacade.DeleteUserRefreshTokens(id);
+		});
+
+		_logger.LogInformation("User {RequesterId} ({RequesterEmail}) disabled user {UserId} ({UserEmail})", requester.Id, requester.Email, id, user.Email);
 	}
 
 	public async Task AcceptInvite(InviteAccept model)
@@ -86,55 +142,18 @@ public class UserService
 			throw new UnauthorizedException("Token di invito non valido o scaduto");
 		}
 
-		await _employeeFacade.CreateAsync(new Employee
-		{
-			UserId = user.Id,
-			Name = model.Name,
-			Surname = model.Surname,
-			FiscalCode = model.FiscalCode,
-			Phone = model.Phone,
-		});
-
 		user.PasswordHash = _userUtils.HashAndCheckPassword(model.Password);
 		user.Status = UserStatus.Active;
 		user.InviteToken = null;
 		user.InviteTokenExpiry = null;
-		_logger.LogInformation("User {UserEmail} accepted invite", user.Email);
+		_logger.LogInformation("User {UserId} ({UserEmail}) accepted invite", user.Id, user.Email);
 
 		await _userFacade.UpdateAsync(user);
-	}
-
-	public async Task CreateUser(UserRegister model, Guid userId)
-	{
-		User requester = await _userFacade.FindByIdAsync(userId) ?? throw new UnauthorizedException();
-		_logger.LogInformation("User {RequesterEmail} requested signup of user {UserEmail}", requester.Email, model.Email);
-
-		if (model.Role <= requester.Role)
-		{
-			throw new ForbiddenException("Non puoi creare un utente con un ruolo uguale o superiore al tuo");
-		}
-
-		User? existing = await _userFacade.FindByEmailAsync(model.Email);
-		if (existing is not null)
-		{
-			throw new EntityException("Email già in uso");
-		}
-
-		await _userFacade.CreateAsync(new User
-		{
-			Id = Guid.NewGuid(),
-			Email = model.Email,
-			PasswordHash = _userUtils.HashAndCheckPassword(model.Password),
-			Role = model.Role,
-			Status = UserStatus.Disabled,
-		});
-		_logger.LogInformation("User {UserEmail} created by {RequesterEmail}", model.Email, requester.Email);
 	}
 
 	public async Task ChangePassword(Guid userId, ChangePassword model)
 	{
 		User user = await _userFacade.FindByIdAsync(userId) ?? throw new UnauthorizedException();
-
 		if (!_userUtils.CheckPassword(user, model.CurrentPassword))
 		{
 			throw new EntityException("La password attuale non è corretta");
@@ -142,6 +161,5 @@ public class UserService
 
 		user.PasswordHash = _userUtils.HashAndCheckPassword(model.NewPassword);
 		await _userFacade.UpdateAsync(user);
-		_logger.LogInformation("User {UserEmail} changed their password", user.Email);
 	}
 }

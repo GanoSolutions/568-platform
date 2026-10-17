@@ -13,11 +13,13 @@ namespace Five68.Controllers;
 public class AuthController : ControllerBase
 {
 	private readonly AuthService _authService;
+	private readonly ILogger? _logger;
 
-	/// <summary>Creates the controller with its required service.</summary>
-	public AuthController(AuthService authService)
+	/// <summary>Creates the controller with its required service and an optional logger.</summary>
+	public AuthController(AuthService authService, ILogger<AuthController>? logger = null)
 	{
 		_authService = authService;
+		_logger = logger;
 	}
 
 	/// <summary>Logs in with email and password, returning an access/refresh token pair.</summary>
@@ -43,13 +45,16 @@ public class AuthController : ControllerBase
 	[HttpPost("logout")]
 	public async Task<IActionResult> Logout()
 	{
-		string? email = User.FindFirst(ClaimTypes.Email)?.Value;
-
-		if (email is null)
+		string? userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+		if (userId is null || !Guid.TryParse(userId, out Guid id))
 		{
 			return Unauthorized();
 		}
-		await _authService.Logout(email);
+
+		string? email = User.FindFirst(ClaimTypes.Email)?.Value;
+		_logger?.LogInformation("User {UserId} ({UserEmail}) required logout", id, email);
+
+		await _authService.Logout(id);
 		return Ok();
 	}
 }

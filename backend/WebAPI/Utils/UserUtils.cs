@@ -1,6 +1,8 @@
 using Easy_Password_Validator;
+using Five68.Exceptions;
 using Five68.Models;
 using Microsoft.Extensions.Options;
+
 namespace Five68.Utils;
 
 
@@ -29,7 +31,7 @@ public class UserUtils
 	{
 		if (!_passwordValidatorService.TestAndScore(password))
 		{
-			throw new ArgumentException("Password does not meet the requirements");
+			throw new EntityException("Password does not meet the requirements");
 		}
 
 		// WorkFactor 12 is a good balance between security and speed.

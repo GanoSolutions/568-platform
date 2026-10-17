@@ -3,6 +3,8 @@ namespace Five68.Models.DTO;
 /// <summary>An employee's profile data.</summary>
 public class EmployeeDTO
 {
+	/// <summary>Unique identifier (same as the user's ID).</summary>
+	public Guid Id { get; set; }
 	/// <summary>First name.</summary>
 	public required string Name { get; set; }
 	/// <summary>Last name.</summary>
@@ -23,6 +25,7 @@ public class EmployeeDTO
 			? null
 			: new EmployeeDTO
 			{
+				Id = emp.UserId,
 				Name = emp.Name,
 				Surname = emp.Surname,
 				FiscalCode = emp.FiscalCode,

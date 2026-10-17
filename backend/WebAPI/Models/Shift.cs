@@ -10,7 +10,4 @@ public class Shift
 	public Guid CreatedBy { get; set; }
 	public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 	public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-
-	public User Creator { get; set; } = null!;
-	public Employee Employee { get; set; } = null!;
 }

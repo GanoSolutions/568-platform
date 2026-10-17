@@ -8,7 +8,7 @@ public class SwapRequestDTO
 	/// <summary>Unique identifier.</summary>
 	public Guid Id { get; set; }
 	/// <summary>The shift being offered.</summary>
-	public Guid ShiftId { get; set; }
+	public ShiftDTO? Shift { get; set; }
 	/// <summary>The employee who owns the shift and is requesting the swap.</summary>
 	public Guid RequesterId { get; set; }
 	/// <summary>The colleague being asked to take the shift.</summary>
@@ -28,7 +28,7 @@ public class SwapRequestDTO
 			: new SwapRequestDTO
 			{
 				Id = request.Id,
-				ShiftId = request.ShiftId,
+				Shift = ShiftDTO.FromShift(request.Shift),
 				RequesterId = request.RequesterId,
 				TargetEmployeeId = request.TargetEmployeeId,
 				Status = request.Status,

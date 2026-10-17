@@ -117,7 +117,8 @@ public class TestAuthController
 
 		using IServiceScope scope = _factory.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-		db.RefreshTokens.Any(t => t.Email == TestEmail).Should().BeFalse();
+		Guid userId = db.Users.First(u => u.Email == TestEmail).Id;
+		db.RefreshTokens.Any(t => t.UserId == userId).Should().BeFalse();
 	}
 
 	[Fact]
@@ -211,7 +212,8 @@ public class TestAuthController
 		using (IServiceScope scope = _factory.Services.CreateScope())
 		{
 			Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
-			UserRefreshTokens stored = db.RefreshTokens.First(t => t.Email == TestEmail);
+			Guid userId = db.Users.First(u => u.Email == TestEmail).Id;
+			UserRefreshTokens stored = db.RefreshTokens.First(t => t.UserId == userId);
 			stored.ExpirationDate = DateTime.UtcNow.AddDays(-1);
 			db.SaveChanges();
 		}
@@ -219,6 +221,33 @@ public class TestAuthController
 		HttpResponseMessage response = await _client.PostAsJsonAsync("/auth/refresh", tokens);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+	}
+
+	[Fact]
+	public async Task Refresh_UserDisabledAfterLogin_Returns401()
+	{
+		Tokens tokens = await LoginAsync(TestEmail, TestPassword);
+
+		using (IServiceScope scope = _factory.Services.CreateScope())
+		{
+			Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+			User user = db.Users.First(u => u.Email == TestEmail);
+			user.Status = UserStatus.Disabled;
+			db.SaveChanges();
+		}
+
+		HttpResponseMessage response = await _client.PostAsJsonAsync("/auth/refresh", tokens);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+		// Ripristina lo stato per non rompere gli altri test della collection che riusano TestEmail.
+		using (IServiceScope scope = _factory.Services.CreateScope())
+		{
+			Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+			User user = db.Users.First(u => u.Email == TestEmail);
+			user.Status = UserStatus.Active;
+			db.SaveChanges();
+		}
 	}
 
 	[Fact]

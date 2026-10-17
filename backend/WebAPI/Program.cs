@@ -1,10 +1,12 @@
 using Easy_Password_Validator;
 using Five68.Facades;
+using Five68.Hubs;
 using Five68.Services;
 using Five68.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using NLog;
@@ -105,6 +107,7 @@ public class Program
 
 		app.UseMiddleware<ExceptionMiddleware>();
 		app.MapControllers();
+		app.MapHub<AppHub>("/hubs/app");
 		app.UseStaticFiles(new StaticFileOptions
 		{
 			RequestPath = "/static",
@@ -146,7 +149,23 @@ public class Program
 						Encoding.UTF8.GetBytes(jwtSettings.Secret)),
 					ClockSkew = TimeSpan.Zero,
 				};
+				options.Events = new JwtBearerEvents
+				{
+					OnMessageReceived = context =>
+					{
+						StringValues accessToken = context.Request.Query["access_token"];
+						if (!string.IsNullOrEmpty(accessToken) &&
+							context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+						{
+							context.Token = accessToken;
+						}
+
+						return Task.CompletedTask;
+					}
+				};
 			});
+
+		services.AddSignalR();
 
 		// Database
 		services.AddDbContext<Five68DbContext>((sp, options) =>
@@ -161,18 +180,31 @@ public class Program
 		services.AddScoped<ShiftFacade>();
 		services.AddScoped<SettingsFacade>();
 		services.AddScoped<SwapRequestFacade>();
+		services.AddScoped<TransactionFacade>();
+		services.AddScoped<PushSubscriptionFacade>();
 
 		// Services
 		services.AddScoped<AuthService>();
 		services.AddSingleton<JwtService>();
 		services.AddScoped<UserService>();
-		services.AddScoped<INotificationService, NoOpNotificationService>();
 		services.AddScoped<ShiftService>();
+		services.AddScoped<EmployeeService>();
 		services.AddScoped<SettingsService>();
 		services.AddScoped<SwapRequestService>();
+		services.AddScoped<SignalRNotificationService>();
+		services.AddScoped<ISwapRequestNotificationService>(sp => sp.GetRequiredService<SignalRNotificationService>());
+		services.AddScoped<IShiftNotificationService>(sp => sp.GetRequiredService<SignalRNotificationService>());
+		services.AddScoped<IInviteService, NoOpInviteService>();
+		services.AddScoped<PushSubscriptionService>();
+		services.AddScoped<WebPushNotificationService>();
+		services.AddScoped<IWebPushNotificationService>(sp => sp.GetRequiredService<WebPushNotificationService>());
+
+		services.AddSingleton<PushDispatchQueue>();
+		services.AddHostedService<PushDispatcherBackgroundService>();
 
 		// Utils
 		services.AddSingleton<UserUtils>();
+		services.AddScoped<AuthUtils>();
 
 		// Password Validator
 		services.AddSingleton(sp =>

@@ -24,7 +24,8 @@ interface CopyWeekModalProps {
 
 export default function CopyWeekModal({ currentMonday, onSubmit, onClose, submitError }: CopyWeekModalProps) {
 	const defaultStart = useMemo(() => addDays(currentMonday, 7), [currentMonday]);
-	const defaultEnd = useMemo(() => addDays(currentMonday, 28), [currentMonday]);
+	// Domenica della stessa settimana di defaultStart (+6, non +7 = lunedì dopo) — richiesto da Hermann in review PR #65.
+	const defaultEnd = useMemo(() => addDays(defaultStart, 6), [defaultStart]);
 
 	const [startDate, setStartDate] = useState(formatInputDate(defaultStart));
 	const [endDate, setEndDate] = useState(formatInputDate(defaultEnd));
@@ -36,6 +37,16 @@ export default function CopyWeekModal({ currentMonday, onSubmit, onClose, submit
 
 		if (!startDate || !endDate) {
 			setLocalError('Seleziona sia la data iniziale sia la data finale');
+			return;
+		}
+
+		if (new Date(`${startDate}T00:00:00`).getDay() !== 1) {
+			setLocalError('La data iniziale deve essere un lunedì');
+			return;
+		}
+
+		if (new Date(`${endDate}T00:00:00`).getDay() !== 0) {
+			setLocalError('La data finale deve essere una domenica');
 			return;
 		}
 
@@ -74,7 +85,7 @@ export default function CopyWeekModal({ currentMonday, onSubmit, onClose, submit
 							onChange={(e) => setStartDate(e.target.value)}
 							className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition"
 						/>
-						<p className="text-slate-400 text-xs mt-1">Se scegli un giorno in mezzo alla settimana, verrà usato il lunedì corrispondente.</p>
+						<p className="text-slate-400 text-xs mt-1">Deve essere un lunedì.</p>
 					</div>
 
 					<div>
@@ -87,7 +98,7 @@ export default function CopyWeekModal({ currentMonday, onSubmit, onClose, submit
 							onChange={(e) => setEndDate(e.target.value)}
 							className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition"
 						/>
-						<p className="text-slate-400 text-xs mt-1">Anche qui verrà usata la settimana del giorno selezionato.</p>
+						<p className="text-slate-400 text-xs mt-1">Deve essere una domenica.</p>
 					</div>
 
 					{(localError || submitError) && (

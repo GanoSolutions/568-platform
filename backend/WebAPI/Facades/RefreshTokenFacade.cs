@@ -14,14 +14,14 @@ public class RefreshTokenFacade
 
 	public async Task UpsertUserRefreshTokens(UserRefreshTokens refreshTokens)
 	{
-		await DeleteUserRefreshTokens(refreshTokens.Email);
+		await DeleteUserRefreshTokens(refreshTokens.UserId);
 		_context.RefreshTokens.Add(refreshTokens);
 		await _context.SaveChangesAsync();
 	}
 
-	public async Task<UserRefreshTokens?> ConsumeRefreshToken(string email)
+	public async Task<UserRefreshTokens?> ConsumeRefreshToken(Guid userId)
 	{
-		UserRefreshTokens? token = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Email == email);
+		UserRefreshTokens? token = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.UserId == userId);
 		if (token is null)
 		{
 			return null;
@@ -32,10 +32,10 @@ public class RefreshTokenFacade
 		return token;
 	}
 
-	public async Task DeleteUserRefreshTokens(string email)
+	public async Task DeleteUserRefreshTokens(Guid userId)
 	{
 		await _context.RefreshTokens
-			.Where(x => x.Email == email)
+			.Where(x => x.UserId == userId)
 			.ExecuteDeleteAsync();
 	}
 }

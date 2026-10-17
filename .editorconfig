@@ -307,6 +307,9 @@ dotnet_diagnostic.CS1591.severity = none
 [backend/WebAPI/Utils/*.cs]
 dotnet_diagnostic.CS1591.severity = none
 
+[backend/WebAPI/Hubs/*.cs]
+dotnet_diagnostic.CS1591.severity = none
+
 [backend/WebAPI/Models/*.cs]
 dotnet_diagnostic.CS1591.severity = none
 
@@ -315,3 +318,8 @@ dotnet_diagnostic.CS1591.severity = none
 
 [backend/WebAPI/Models/Authentication/UserRefreshTokens.cs]
 dotnet_diagnostic.CS1591.severity = none
+
+# CA1711 wants types ending in "Queue" to derive from Queue<T>; PushDispatchQueue
+# wraps a bounded Channel<T> and *is* a queue, so the name is accurate.
+[backend/WebAPI/Utils/PushDispatchQueue.cs]
+dotnet_diagnostic.CA1711.severity = none

@@ -1,5 +1,7 @@
 using Five68.Models;
+using Five68.Models.DTO;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Five68.Facades;
 
@@ -58,4 +60,73 @@ public class ShiftFacade
 		return await _context.ClosedDays.AnyAsync(x => x.Date == date);
 	}
 
+	internal async Task DeleteFutureAssignmentsForEmployeeAsync(Guid employeeId, DateOnly fromDate)
+	{
+		await _context.Shifts
+			.Where(x => x.EmployeeId == employeeId && x.Date >= fromDate)
+			.ExecuteDeleteAsync();
+	}
+
+	internal async Task<ShiftCopyWeekResult?> CopyWeekAsync(DateOnly sourceWeekMonday, DateOnly targetStartDate, DateOnly targetEndDate, Guid requesterId)
+	{
+		List<Shift> sourceShifts = await _context.Shifts
+			.Where(x => x.Date >= sourceWeekMonday && x.Date <= sourceWeekMonday.AddDays(6))
+			.ToListAsync();
+
+		if (sourceShifts.Count == 0)
+		{
+			return null;
+		}
+
+		await using IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
+		ShiftCopyWeekResult outcome = new();
+		List<Shift> toCreate = new();
+
+		for (DateOnly targetMonday = targetStartDate; targetMonday <= targetEndDate; targetMonday = targetMonday.AddDays(7))
+		{
+			foreach (Shift source in sourceShifts)
+			{
+				int offset = source.Date.DayNumber - sourceWeekMonday.DayNumber;
+				DateOnly targetDate = targetMonday.AddDays(offset);
+				if (targetDate == source.Date)
+				{
+					continue;
+				}
+
+				if (await _context.ClosedDays.AnyAsync(x => x.Date == targetDate))
+				{
+					outcome.SkippedClosedDays++;
+					continue;
+				}
+
+				bool existing = await _context.Shifts.AnyAsync(x => x.Date == targetDate && x.EmployeeId == source.EmployeeId);
+				if (existing)
+				{
+					await _context.Shifts
+						.Where(x => x.Date == targetDate && x.EmployeeId == source.EmployeeId)
+						.ExecuteDeleteAsync();
+					outcome.Overwritten++;
+				}
+				else
+				{
+					outcome.Created++;
+				}
+
+				toCreate.Add(new Shift
+				{
+					Id = Guid.NewGuid(),
+					Date = targetDate,
+					EmployeeId = source.EmployeeId,
+					StartTime = source.StartTime,
+					Duration = source.Duration,
+					CreatedBy = requesterId,
+				});
+			}
+		}
+
+		await _context.Shifts.AddRangeAsync(toCreate);
+		await _context.SaveChangesAsync();
+		await transaction.CommitAsync();
+		return outcome;
+	}
 }
