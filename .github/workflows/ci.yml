@@ -21,8 +21,8 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -37,7 +37,7 @@ jobs:
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Lint
         working-directory: backend
@@ -61,11 +61,11 @@ jobs:
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Install dependencies
         working-directory: frontend
@@ -93,7 +93,7 @@ jobs:
   #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #     - name: Build and push image to GHCR
   #       run: |
   #         echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -125,7 +125,7 @@ jobs:
   #     github.event.pull_request.head.ref == 'development'
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #     - name: Check version tag does not already exist
   #       run: |
   #         VERSION=$(grep -oP '<Version>\K.*?(?=</Version>)' backend/WebAPI/WebAPI.csproj)
@@ -140,7 +140,7 @@ jobs:
   #   permissions:
   #     contents: write
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #     - name: Create and push version tag
   #       run: |
   #         VERSION=$(grep -oP '<Version>\K.*?(?=</Version>)' backend/WebAPI/WebAPI.csproj)
