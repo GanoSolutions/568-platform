@@ -29,17 +29,27 @@ async function registerOnBackend(subscription: PushSubscription): Promise<void> 
 	});
 }
 
+// Cache a livello di modulo (stesso pattern di employeesCache in useEmployees):
+// Requests è oggi l'unica pagina che monta questo hook, ma lasciarla e
+// tornarci smonta/rimonta l'hook da zero — senza cache rifà il fetch della
+// chiave VAPID e dello stato "enabled" ogni volta, con un flash visivo e
+// chiamate sprecate (segnalato da Hermann in review su PR #74). La chiave
+// VAPID è config statica del server, non cambia in sessione. Lo stato
+// "enabled" invece è per-utente: invalidato esplicitamente al logout, così
+// un secondo utente sullo stesso tab non eredita lo stato del primo.
+let vapidPublicKeyCache: string | null = null;
+let vapidCheckedCache = false;
+let enabledCache = false;
+let enabledCheckedCache = false;
+
 export function usePushNotifications() {
 	const { user } = useAuth();
 	const [permission, setPermission] = useState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
-	const [enabled, setEnabled] = useState(false);
+	const [enabled, setEnabled] = useState(enabledCache);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
-	// La chiave VAPID vive solo nel backend (issue #76 — prima andava rifatta la
-	// build Docker per cambiarla, ora si legge a runtime). null finché non è
-	// stata recuperata o se WebPush non è abilitato/configurato sul server (404).
-	const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
-	const [vapidChecked, setVapidChecked] = useState(false);
+	const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(vapidPublicKeyCache);
+	const [vapidChecked, setVapidChecked] = useState(vapidCheckedCache);
 
 	useEffect(() => {
 		if (typeof Notification === 'undefined') {
@@ -52,16 +62,32 @@ export function usePushNotifications() {
 
 	useEffect(() => {
 		if (!user) {
+			// Logout: la cache del prossimo utente sullo stesso tab riparte da zero.
+			vapidPublicKeyCache = null;
+			vapidCheckedCache = false;
+			enabledCache = false;
+			enabledCheckedCache = false;
 			setVapidPublicKey(null);
 			setVapidChecked(false);
+			setEnabled(false);
+			return;
+		}
+
+		if (vapidCheckedCache) {
+			setVapidPublicKey(vapidPublicKeyCache);
+			setVapidChecked(true);
 			return;
 		}
 
 		let mounted = true;
 
 		pushApi.vapidPublicKey()
-			.then(({ publicKey }) => { if (mounted) setVapidPublicKey(publicKey); })
+			.then(({ publicKey }) => {
+				vapidPublicKeyCache = publicKey;
+				if (mounted) setVapidPublicKey(publicKey);
+			})
 			.catch((e) => {
+				vapidPublicKeyCache = null;
 				if (!mounted) return;
 				setVapidPublicKey(null);
 				// 404 = WebPush disabilitato/non configurato sul server, non un errore da mostrare.
@@ -69,7 +95,10 @@ export function usePushNotifications() {
 					setError((e as Error).message || 'Verifica configurazione notifiche non riuscita');
 				}
 			})
-			.finally(() => { if (mounted) setVapidChecked(true); });
+			.finally(() => {
+				vapidCheckedCache = true;
+				if (mounted) setVapidChecked(true);
+			});
 
 		return () => { mounted = false; };
 	}, [user]);
@@ -82,13 +111,19 @@ export function usePushNotifications() {
 		return 'ready';
 	}, [user, vapidChecked, vapidPublicKey]);
 
-	// GET /push/status dice se l'utente ha almeno una subscription attiva su
-	// QUALSIASI dispositivo — va incrociato con la subscription di questo browser,
-	// altrimenti un utente iscritto dal telefono vedrebbe "attivo" anche sul PC
-	// dove non lo è mai stato.
+	// GET /push/status ritorna la subscription registrata per l'utente (modello
+	// "una per utente": attivarne un'altra altrove sostituisce questa). Va
+	// confrontato l'endpoint con quello del browser corrente, non basta che
+	// entrambi esistano — altrimenti un browser con una subscription locale
+	// ormai rimpiazzata da un altro dispositivo risulterebbe "attivo" lo stesso.
 	useEffect(() => {
 		if (availability !== 'ready') {
 			setEnabled(false);
+			return;
+		}
+
+		if (enabledCheckedCache) {
+			setEnabled(enabledCache);
 			return;
 		}
 
@@ -101,8 +136,10 @@ export function usePushNotifications() {
 					navigator.serviceWorker.getRegistration(pushServiceWorkerPath),
 				]);
 				const subscription = await registration?.pushManager.getSubscription();
-				if (!mounted) return;
-				setEnabled(status.active && !!subscription);
+				const isEnabled = status.active && subscription?.endpoint === status.endpoint;
+				enabledCache = isEnabled;
+				enabledCheckedCache = true;
+				if (mounted) setEnabled(isEnabled);
 			} catch (loadError) {
 				if (!mounted) return;
 				setError((loadError as Error).message || 'Verifica stato notifiche non riuscita');
@@ -151,6 +188,8 @@ export function usePushNotifications() {
 			}
 
 			await registerOnBackend(subscription);
+			enabledCache = true;
+			enabledCheckedCache = true;
 			setEnabled(true);
 		} catch (enableError) {
 			setError((enableError as Error).message || 'Attivazione notifiche non riuscita');
@@ -183,6 +222,8 @@ export function usePushNotifications() {
 			}
 
 			await registerOnBackend(subscription);
+			enabledCache = true;
+			enabledCheckedCache = true;
 			setEnabled(true);
 		} catch (e) {
 			setError((e as Error)?.message || 'Registrazione subscription non riuscita');
@@ -191,6 +232,10 @@ export function usePushNotifications() {
 		}
 	}, [availability, vapidPublicKey]);
 
+	// Disattivazione esplicita dalla UI (bottone "Disattiva notifiche"): a
+	// differenza del logout, qui si disiscrive anche il browser (non solo il
+	// backend) — l'utente ha chiesto di fermare le notifiche, non sta per
+	// riloggarsi a breve.
 	const disable = useCallback(async () => {
 		setLoading(true);
 		setError('');
@@ -201,15 +246,13 @@ export function usePushNotifications() {
 				const subscription = await registration?.pushManager.getSubscription();
 
 				if (subscription) {
-					// Il logout forzato (refresh token scaduto) arriva qui con i token già
-					// azzerati: la unsubscribe lato backend va in 401. Disiscriviamo comunque
-					// il browser — il backend disattiva da solo le subscription scadute al
-					// prossimo invio (404/410 dal push service).
-					await pushApi.unsubscribe(subscription.endpoint).catch(() => { /* vedi sopra */ });
+					await pushApi.unsubscribe(subscription.endpoint);
 					await subscription.unsubscribe();
 				}
 			}
 
+			enabledCache = false;
+			enabledCheckedCache = true;
 			setEnabled(false);
 		} catch (disableError) {
 			setError((disableError as Error).message || 'Disattivazione notifiche non riuscita');
@@ -219,29 +262,25 @@ export function usePushNotifications() {
 		}
 	}, []);
 
+	// La unsubscribe al logout vive in AuthContext.logout(), non qui: questo
+	// hook è montato solo nella pagina Richieste, e un logout da un'altra
+	// pagina non lo sveglierebbe. In più il vecchio listener su app:logout
+	// scattava anche sui logout forzati (token scaduto, sessione sostituita
+	// da un login altrove), dove la subscription non va toccata nel nuovo
+	// modello (sopravvive ai cambi di sessione). Resta solo app:login, per
+	// ri-registrare la subscription sul backend quando il permesso è già
+	// concesso (richiesto da Hermann in review su PR #74).
 	useEffect(() => {
-		// app:logout porta nel detail un array `pending`: ci iscriviamo con la
-		// promise di disable() così AuthContext.logout() può aspettarla (con
-		// timeout breve) prima di cancellare i token — altrimenti la unsubscribe,
-		// che richiede ancora autenticazione, rischia di partire dopo che i token
-		// sono già stati azzerati (richiesto da Hermann, guida frontend PR #71).
-		const onAppLogout = (event: Event) => {
-			const detail = (event as CustomEvent<{ pending?: Promise<unknown>[] }>).detail;
-			detail?.pending?.push(disable().catch(() => { /* ignore */ }));
-		};
-
 		const onAppLogin = () => {
 			registerIfGranted().catch(() => { /* ignore */ });
 		};
 
-		window.addEventListener('app:logout', onAppLogout);
 		window.addEventListener('app:login', onAppLogin);
 
 		return () => {
-			window.removeEventListener('app:logout', onAppLogout);
 			window.removeEventListener('app:login', onAppLogin);
 		};
-	}, [disable, registerIfGranted]);
+	}, [registerIfGranted]);
 
 	return {
 		availability,

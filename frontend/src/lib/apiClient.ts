@@ -453,7 +453,8 @@ export const pushApi = {
 
 	unsubscribe: (endpoint: string) => api.post<void>('/push/unsubscribe', { endpoint }),
 
-	status: () => api.get<{ active: boolean }>('/push/status'),
+	/** endpoint è quello della subscription registrata per l'utente (null se nessuna) — va confrontato con quello del browser corrente per sapere se è attiva su QUESTO dispositivo o su un altro. */
+	status: () => api.get<{ active: boolean; endpoint: string | null }>('/push/status'),
 };
 
 export const swapRequestApi = {

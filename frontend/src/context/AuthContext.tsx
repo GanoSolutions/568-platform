@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AppUser } from '@/types';
-import { authApi, userApi, UserStatus, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
+import { authApi, pushApi, userApi, UserStatus, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
+
+// Deve combaciare con pushServiceWorkerPath in usePushNotifications.ts — non
+// importato da lì per evitare un ciclo (quell'hook usa useAuth da qui).
+const PUSH_SERVICE_WORKER_PATH = '/push-sw-v2.js';
 
 interface AuthContextValue {
 	user: AppUser | null
@@ -107,19 +111,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	};
 
 	const logout = async () => {
-		// app:logout porta nel detail un array `pending`: chi deve fare cleanup
-		// autenticato prima che i token sparicano (es. usePushNotifications, che
-		// disiscrive la subscription push) ci infila la sua promise. La aspettiamo
-		// qui, con un timeout breve, prima di cancellare i token — altrimenti quella
-		// chiamata rischia di partire quando i token sono già azzerati (segnalato
-		// da Hermann nella guida frontend della PR #71).
-		const pending: Promise<unknown>[] = [];
-		window.dispatchEvent(new CustomEvent('app:logout', { detail: { pending } }));
-		await Promise.race([
-			Promise.allSettled(pending),
-			new Promise(resolve => setTimeout(resolve, 1500)),
-		]);
+		// Disiscrive la subscription push di questo browser PRIMA di cancellare i
+		// token (/push/unsubscribe richiede autenticazione) — non tocca la
+		// subscription lato browser (resta registrata), così il prossimo login la
+		// ri-registra sul backend senza richiedere di nuovo il permesso. Vive qui
+		// e non in un listener su app:logout generico perché quell'evento scatta
+		// anche sui logout forzati (token scaduto, sessione sostituita da un
+		// login altrove) — casi in cui la subscription non va toccata, dato che
+		// nel nuovo modello sopravvive ai cambi di sessione (richiesto da
+		// Hermann in review su PR #74).
+		try {
+			if ('serviceWorker' in navigator) {
+				const registration = await navigator.serviceWorker.getRegistration(PUSH_SERVICE_WORKER_PATH);
+				const subscription = await registration?.pushManager.getSubscription();
+				if (subscription) {
+					await pushApi.unsubscribe(subscription.endpoint);
+				}
+			}
+		} catch {
+			// best-effort: non blocchiamo il logout per un errore sulla unsubscribe
+		}
 
+		window.dispatchEvent(new Event('app:logout'));
 		try {
 			await authApi.logout();
 		} catch { /* tokens vengono puliti comunque */ }
