@@ -1,6 +1,4 @@
-// v3 - logo notification icons
-const BASE_URL = 'https://568-platform.vercel.app'
-
+// v5 - payload camelCase dal backend C# (issue #83), origin dinamico, dedup per richiesta
 self.addEventListener('install', () => {
   self.skipWaiting()
 })
@@ -9,17 +7,32 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim())
 })
 
+// Pagina da aprire al click, in base al type dell'evento. Oggi tutti vanno su
+// /requests, ma resta pronta a differenziare se arrivano altri type.
+function urlForType(type) {
+  switch (type) {
+    case 'swap_request_created':
+    case 'swap_request_responded':
+    default:
+      return '/requests'
+  }
+}
+
 self.addEventListener('push', (event) => {
   if (!event.data) return
 
   const payload = event.data.json()
   const title = payload.title || 'Turni 568'
+  const origin = self.location.origin
   const options = {
     body: payload.body || 'Hai una nuova notifica',
-    icon: BASE_URL + '/logo.png',
-    badge: BASE_URL + '/logo-badge.png',
+    icon: origin + '/logo.png',
+    badge: origin + '/logo-badge.png',
+    // Stesso tag = stessa richiesta: notifiche successive sulla stessa richiesta
+    // si sostituiscono invece di accumularsi.
+    tag: payload.swapRequestId,
     data: {
-      url: payload.url || '/requests',
+      url: payload.url || urlForType(payload.type),
     },
   }
 

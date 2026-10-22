@@ -1,14 +1,14 @@
 using Five68.Facades;
 using Five68.Models;
 using Five68.Utils;
-using Org.BouncyCastle.Asn1.Ocsp;
-using System.Data.SqlTypes;
 using System.Text.Json;
 
 namespace Five68.Services
 {
 	public class WebPushNotificationService : IWebPushNotificationService
 	{
+		private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+
 		private readonly PushSubscriptionFacade _pushSubscriptionFacade;
 		private readonly UserFacade _userFacade;
 		private readonly PushDispatchQueue _queue;
@@ -67,9 +67,8 @@ namespace Five68.Services
 			IEnumerable<User> supervisors = await _userFacade.GetByRolesAsync(UserRole.Admin, UserRole.Manager);
 			HashSet<Guid> recipients = [.. directRecipients, .. supervisors.Select(u => u.Id)];
 
-			IEnumerable<PushSubscription> subscriptions = await _pushSubscriptionFacade.GetActiveByUserIdsAsync(recipients);
-
-			string json = JsonSerializer.Serialize(payload);
+			IEnumerable<PushSubscription> subscriptions = await _pushSubscriptionFacade.GetByUserIdsAsync(recipients);
+			string json = JsonSerializer.Serialize(payload, _jsonOptions);
 			int queued = 0;
 
 			foreach (PushSubscription s in subscriptions)
