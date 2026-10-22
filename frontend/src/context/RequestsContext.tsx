@@ -175,7 +175,14 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 			resetIntentionalStop();
 			connection.start().then(markConnectionRestored).catch(() => {
 				if (cancelled) return;
-				markConnectionDown();
+				// Il primissimo tentativo (es. al reload della pagina) può fallire una
+				// volta per una sbavatura transitoria — es. il token è appena scaduto e
+				// non è ancora stato refreshato da un'altra chiamata API — e riuscire
+				// al retry immediato subito dopo. Il toast scatta solo dal secondo
+				// tentativo in poi (issue #82), come succede già per le riconnessioni:
+				// withAutomaticReconnect ne fa diverse in silenzio prima di arrivare a
+				// onreconnecting.
+				if (attempt > 0) markConnectionDown();
 				attempt += 1;
 				const delay = Math.min(1000 * 2 ** attempt, 30000);
 				retryTimer = setTimeout(tryConnect, delay);
