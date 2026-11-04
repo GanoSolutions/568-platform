@@ -13,13 +13,17 @@ namespace Five68.Facades
 		}
 
 		/// <summary>
-		/// Upsert per Endpoint (non per utente): se lo stesso browser si re-iscrive dopo un cambio
-		/// utente, la riga viene riassegnata invece di duplicarsi. È la difesa lato server contro
-		/// il bug "notifiche all'utente sbagliato su device condiviso".
+		/// Una sola subscription per utente: l'ultimo device che si iscrive sostituisce il precedente.
+		/// Se lo stesso browser era di un altro utente, la sua riga va eliminata prima, altrimenti
+		/// l'insert violerebbe UNIQUE(Endpoint). Va chiamato dentro una transazione.
 		/// </summary>
-		internal async Task UpsertAsync(Guid userId, string endpoint, string p256dh, string auth, string? userAgent)
+		internal async Task UpsertForUserAsync(Guid userId, string endpoint, string p256dh, string auth, string? userAgent)
 		{
-			PushSubscription existing = await _context.PushSubscriptions.FirstOrDefaultAsync(x => x.Endpoint == endpoint);
+			await _context.PushSubscriptions
+				.Where(x => x.Endpoint == endpoint && x.UserId != userId)
+				.ExecuteDeleteAsync();
+
+			PushSubscription existing = await _context.PushSubscriptions.FirstOrDefaultAsync(x => x.UserId == userId);
 
 			if (existing is null)
 			{
@@ -31,16 +35,14 @@ namespace Five68.Facades
 					P256dh = p256dh,
 					Auth = auth,
 					UserAgent = userAgent,
-					Active = true,
 				});
 			}
 			else
 			{
-				existing.UserId = userId;
+				existing.Endpoint = endpoint;
 				existing.P256dh = p256dh;
 				existing.Auth = auth;
 				existing.UserAgent = userAgent;
-				existing.Active = true;
 				existing.UpdatedAt = DateTimeOffset.UtcNow;
 			}
 
@@ -48,36 +50,40 @@ namespace Five68.Facades
 		}
 
 		/// <summary>Disattivazione richiesta dall'utente: solo su una sua subscription.</summary>
-		internal async Task<bool> DeactivateForUserAsync(Guid userId, string endpoint)
-		{
-			int updated = await _context.PushSubscriptions
-				.Where(x => x.Endpoint == endpoint && x.UserId == userId && x.Active)
-				.ExecuteUpdateAsync(s => s
-					.SetProperty(x => x.Active, false)
-					.SetProperty(x => x.UpdatedAt, DateTimeOffset.UtcNow));
-
-			return updated > 0;
-		}
-		/// <summary>Disattivazione automatica: l'endpoint non esiste più lato push service (404/410).</summary>
-		internal async Task DeactivateByEndpointAsync(string endpoint)
+		internal async Task DeleteForUserAsync(Guid userId, string endpoint)
 		{
 			await _context.PushSubscriptions
-				.Where(x => x.Endpoint == endpoint && x.Active)
-				.ExecuteUpdateAsync(s => s
-					.SetProperty(x => x.Active, false)
-					.SetProperty(x => x.UpdatedAt, DateTimeOffset.UtcNow));
+				.Where(x => x.UserId == userId && x.Endpoint == endpoint)
+				.ExecuteDeleteAsync();
 		}
-
-		internal async Task<bool> HasActiveAsync(Guid userId)
+		/// <summary>Disattivazione automatica: l'endpoint non esiste più lato push service (404/410).</summary>
+		internal async Task DeleteByEndpointAsync(string endpoint)
 		{
-			return await _context.PushSubscriptions.AnyAsync(x => x.UserId == userId && x.Active);
+			await _context.PushSubscriptions
+				.Where(x => x.Endpoint == endpoint)
+				.ExecuteDeleteAsync();
 		}
 
-		internal async Task<IEnumerable<PushSubscription>> GetActiveByUserIdsAsync(IEnumerable<Guid> userIds)
+		internal async Task DeleteAllForUserAsync(Guid userId)
+		{
+			await _context.PushSubscriptions
+				.Where(x => x.UserId == userId)
+				.ExecuteDeleteAsync();
+		}
+
+		internal async Task<string> GetEndpointForUserAsync(Guid userId)
+		{
+			return await _context.PushSubscriptions
+				.Where(x => x.UserId == userId)
+				.Select(x => x.Endpoint)
+				.FirstOrDefaultAsync();
+		}
+
+		internal async Task<IEnumerable<PushSubscription>> GetByUserIdsAsync(IEnumerable<Guid> userIds)
 		{
 			return await _context.PushSubscriptions
 				.AsNoTracking()
-				.Where(x => x.Active && userIds.Contains(x.UserId))
+				.Where(x => userIds.Contains(x.UserId))
 				.ToListAsync();
 		}
 	}

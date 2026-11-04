@@ -14,6 +14,7 @@ namespace Five68.Services
 		private readonly ShiftFacade _shiftFacade;
 		private readonly TransactionFacade _transactionFacade;
 		private readonly RefreshTokenFacade _refreshTokenFacade;
+		private readonly PushSubscriptionFacade _pushSubscriptionFacade;
 		private readonly AuthUtils _authUtils;
 		private readonly UserUtils _userUtils;
 		private readonly IInviteService _notificationService;
@@ -24,6 +25,7 @@ namespace Five68.Services
 			ShiftFacade shiftFacade,
 			TransactionFacade transactionFacade,
 			RefreshTokenFacade refreshTokenFacade,
+			PushSubscriptionFacade pushSubscriptionFacade,
 			AuthUtils authUtils,
 			UserUtils userUtils,
 			IInviteService notificationService,
@@ -33,6 +35,7 @@ namespace Five68.Services
 			_shiftFacade = shiftFacade;
 			_transactionFacade = transactionFacade;
 			_refreshTokenFacade = refreshTokenFacade;
+			_pushSubscriptionFacade = pushSubscriptionFacade;
 			_authUtils = authUtils;
 			_userUtils = userUtils;
 			_notificationService = notificationService;
@@ -130,6 +133,7 @@ namespace Five68.Services
 				await _userFacade.UpdateAsync(user);
 				await _shiftFacade.DeleteFutureAssignmentsForEmployeeAsync(id, DateOnly.FromDateTime(DateTime.UtcNow));
 				await _refreshTokenFacade.DeleteUserRefreshTokens(id);
+				await _pushSubscriptionFacade.DeleteAllForUserAsync(id);
 			});
 
 			_logger.LogInformation($"User {requester.Id} ({requester.Email}) disabled user {id} ({user.Email})");

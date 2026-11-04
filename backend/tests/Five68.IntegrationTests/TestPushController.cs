@@ -22,9 +22,10 @@ public class TestPushController
 	private const string AdminEmail = "push-admin@five68.com";
 	private const string ManagerEmail = "push-manager@five68.com";
 
-	// Chiavi fittizie: nessun invio reale parte durante i test (il worker è spento), quindi
-	// non devono essere crittograficamente valide, solo stabili e confrontabili.
-	private const string P256dh = "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA0QTpQtUbVlUls0VJXg7A8uTs1XbjhazAkj7I99e8QcYP7DkM";
+	// Chiavi ben formate (il backend ne valida la forma: P256dh = punto P-256 non compresso, 65 byte
+	// con prefisso 0x04; Auth = 16 byte; entrambe base64url senza padding). Nessun invio reale parte
+	// durante i test (il worker è spento), quindi non serve che corrispondano a un browser vero.
+	private const string P256dh = "BMCOYrAIEnIAEXDKi4eRGU9Wp_cw1f75ZSXiXzVqlv_V7V8vvWNrqbh7nnFZHyoVP5dIt73bDqq5mtSie4jMYYo";
 	private const string Auth = "tBHItJI5svbpez7KI4CCXg";
 
 	public TestPushController(Five68WebAppFactory factory)
@@ -51,7 +52,14 @@ public class TestPushController
 		return db.PushSubscriptions.Where(x => x.Endpoint == endpoint).ToList();
 	}
 
-	private void SeedSubscription(Guid userId, string endpoint, bool active = true)
+	private List<PushSubscription> GetSubscriptionsForUser(Guid userId)
+	{
+		using IServiceScope scope = factory_.Services.CreateScope();
+		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
+		return db.PushSubscriptions.Where(x => x.UserId == userId).ToList();
+	}
+
+	private void SeedSubscription(Guid userId, string endpoint)
 	{
 		using IServiceScope scope = factory_.Services.CreateScope();
 		Five68DbContext db = scope.ServiceProvider.GetRequiredService<Five68DbContext>();
@@ -63,7 +71,6 @@ public class TestPushController
 			Endpoint = endpoint,
 			P256dh = P256dh,
 			Auth = Auth,
-			Active = active,
 		});
 		db.SaveChanges();
 	}
@@ -79,13 +86,13 @@ public class TestPushController
 		db.SaveChanges();
 	}
 
-	private async Task<HttpResponseMessage> SubscribeAsync(string endpoint, string? userAgent = null)
+	private async Task<HttpResponseMessage> SubscribeAsync(string endpoint, string? userAgent = null, string p256dh = P256dh, string auth = Auth)
 	{
 		return await client_.PostAsJsonAsync("/Push/subscribe", new PushSubscriptionCreate
 		{
 			Endpoint = endpoint,
-			P256dh = P256dh,
-			Auth = Auth,
+			P256dh = p256dh,
+			Auth = auth,
 			UserAgent = userAgent,
 		});
 	}
@@ -95,13 +102,25 @@ public class TestPushController
 		return await client_.PostAsJsonAsync("/Push/unsubscribe", new PushUnsubscribe { Endpoint = endpoint });
 	}
 
-	private async Task<bool> GetStatusAsync()
+	private async Task<(bool Active, string? Endpoint)> GetStatusAsync()
 	{
 		HttpResponseMessage response = await client_.GetAsync("/Push/status");
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
+		// GetProperty (e non TryGetProperty): "endpoint" deve esserci sempre, anche quando è null
 		using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-		return body.RootElement.GetProperty("active").GetBoolean();
+		return (
+			body.RootElement.GetProperty("active").GetBoolean(),
+			body.RootElement.GetProperty("endpoint").GetString());
+	}
+
+	// Disabilita l'utente via API come farebbe un Admin, da un client separato: client_ resta
+	// autenticato come l'utente, con un access token ancora valido fino alla scadenza.
+	private async Task DisableUserAsync(Guid userId)
+	{
+		using HttpClient admin = factory_.CreateClient();
+		await admin.AuthorizeAsAsync(factory_, AdminEmail);
+		(await admin.DeleteAsync($"/user/{userId}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 	}
 
 	/// <summary>
@@ -132,7 +151,7 @@ public class TestPushController
 	// --- POST /Push/subscribe ---
 
 	[Fact]
-	public async Task Subscribe_Authenticated_Returns204AndStoresActiveSubscription()
+	public async Task Subscribe_Authenticated_Returns204AndStoresSubscription()
 	{
 		factory_.SeedUser("push-sub-1@five68.com", UserRole.Employee);
 		Guid userId = factory_.GetUserId("push-sub-1@five68.com");
@@ -149,7 +168,6 @@ public class TestPushController
 		stored[0].P256dh.Should().Be(P256dh);
 		stored[0].Auth.Should().Be(Auth);
 		stored[0].UserAgent.Should().Be("Mozilla/5.0 (Android)");
-		stored[0].Active.Should().BeTrue("una subscription appena registrata deve essere subito utilizzabile");
 	}
 
 	[Fact]
@@ -160,6 +178,23 @@ public class TestPushController
 
 		response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 		GetSubscriptions(NewEndpoint("sub-anon")).Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task Subscribe_DisabledUserWithValidToken_Returns403AndStoresNothing()
+	{
+		// Un utente disabilitato può avere ancora un access token valido: senza il controllo lato
+		// server ricreerebbe la subscription che la disabilitazione ha appena cancellato
+		factory_.SeedUser("push-sub-disabled@five68.com", UserRole.Employee);
+		Guid userId = factory_.GetUserId("push-sub-disabled@five68.com");
+
+		await client_.AuthorizeAsAsync(factory_, "push-sub-disabled@five68.com");
+		await DisableUserAsync(userId);
+
+		HttpResponseMessage response = await SubscribeAsync(NewEndpoint("sub-disabled"));
+
+		response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+		GetSubscriptionsForUser(userId).Should().BeEmpty();
 	}
 
 	[Fact]
@@ -202,6 +237,39 @@ public class TestPushController
 		GetSubscriptions(endpoint).Should().BeEmpty();
 	}
 
+	// Chiavi malformate farebbero fallire la cifratura a ogni invio: vanno rifiutate subito.
+	[Theory]
+	[InlineData("CMCOYrAIEnIAEXDKi4eRGU9Wp_cw1f75ZSXiXzVqlv_V7V8vvWNrqbh7nnFZHyoVP5dIt73bDqq5mtSie4jMYYo")] // 65 byte ma primo byte 0x08 invece di 0x04
+	[InlineData(Auth)] // base64url valido ma 16 byte invece di 65 (chiavi scambiate dal client)
+	[InlineData("chiave-non-valida!")] // non è base64url
+	public async Task Subscribe_MalformedP256dh_Returns400AndStoresNothing(string p256dh)
+	{
+		factory_.SeedUser("push-sub-bad-p256dh@five68.com", UserRole.Employee);
+		Guid userId = factory_.GetUserId("push-sub-bad-p256dh@five68.com");
+		await client_.AuthorizeAsAsync(factory_, "push-sub-bad-p256dh@five68.com");
+
+		HttpResponseMessage response = await SubscribeAsync(NewEndpoint("sub-bad-p256dh"), p256dh: p256dh);
+
+		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		GetSubscriptionsForUser(userId).Should().BeEmpty();
+	}
+
+	[Theory]
+	[InlineData("tBHItJI5svbpez7KI4CC")] // 15 byte invece di 16
+	[InlineData(P256dh)] // base64url valido ma 65 byte invece di 16 (chiavi scambiate dal client)
+	[InlineData("auth!!")] // non è base64url
+	public async Task Subscribe_MalformedAuth_Returns400AndStoresNothing(string auth)
+	{
+		factory_.SeedUser("push-sub-bad-auth@five68.com", UserRole.Employee);
+		Guid userId = factory_.GetUserId("push-sub-bad-auth@five68.com");
+		await client_.AuthorizeAsAsync(factory_, "push-sub-bad-auth@five68.com");
+
+		HttpResponseMessage response = await SubscribeAsync(NewEndpoint("sub-bad-auth"), auth: auth);
+
+		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		GetSubscriptionsForUser(userId).Should().BeEmpty();
+	}
+
 	// Difesa SSRF: il worker fa una POST verso l'endpoint salvato, quindi solo push service noti.
 	// I casi limite dell'allowlist stanno negli unit test dell'attributo; qui si verifica che
 	// l'attributo sia davvero applicato al DTO di subscribe e che non si salvi nulla.
@@ -239,11 +307,11 @@ public class TestPushController
 	}
 
 	[Fact]
-	public async Task Subscribe_SameEndpointDifferentUser_ReassignsRowInsteadOfDuplicating()
+	public async Task Subscribe_SameEndpointDifferentUser_MovesEndpointToNewUser()
 	{
 		// Regressione "device condiviso": due colleghi usano lo stesso browser/tablet. Alla
-		// seconda iscrizione la riga deve cambiare proprietario, altrimenti il primo utente
-		// continuerebbe a ricevere le notifiche destinate al secondo.
+		// seconda iscrizione la riga del primo utente va eliminata, altrimenti continuerebbe a
+		// ricevere le notifiche destinate al secondo.
 		factory_.SeedUser("push-shared-a@five68.com", UserRole.Employee);
 		factory_.SeedUser("push-shared-b@five68.com", UserRole.Employee);
 		Guid userA = factory_.GetUserId("push-shared-a@five68.com");
@@ -257,15 +325,38 @@ public class TestPushController
 		await client_.AuthorizeAsAsync(factory_, "push-shared-b@five68.com");
 		(await SubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-		List<PushSubscription> stored = GetSubscriptions(endpoint);
-		stored.Should().HaveCount(1, "lo stesso endpoint non deve mai produrre due righe");
-		stored[0].UserId.Should().Be(userB, "l'endpoint deve essere riassegnato all'ultimo utente iscritto");
-		stored[0].Active.Should().BeTrue();
+		GetSubscriptions(endpoint).Should().ContainSingle("lo stesso endpoint non deve mai produrre due righe")
+			.Which.UserId.Should().Be(userB, "l'endpoint deve passare all'ultimo utente iscritto");
+		GetSubscriptionsForUser(userA).Should().BeEmpty("il vecchio proprietario del browser non deve più ricevere notifiche");
 	}
 
 	[Fact]
-	public async Task Subscribe_SameUserTwoEndpoints_KeepsBothActive()
+	public async Task Subscribe_SameEndpointDifferentUser_CallerAlreadySubscribed_ReplacesCallerRow()
 	{
+		// Come sopra, ma chi si iscrive ha già una sua riga su un altro device: la sua riga
+		// prende l'endpoint condiviso e quella del vecchio proprietario sparisce, senza violare
+		// l'unicità né su UserId né su Endpoint.
+		factory_.SeedUser("push-shared-c@five68.com", UserRole.Employee);
+		factory_.SeedUser("push-shared-d@five68.com", UserRole.Employee);
+		Guid userC = factory_.GetUserId("push-shared-c@five68.com");
+		Guid userD = factory_.GetUserId("push-shared-d@five68.com");
+		string sharedEndpoint = NewEndpoint("shared-device-2");
+		string ownEndpoint = NewEndpoint("shared-device-2-own");
+		SeedSubscription(userC, sharedEndpoint);
+		SeedSubscription(userD, ownEndpoint);
+
+		await client_.AuthorizeAsAsync(factory_, "push-shared-d@five68.com");
+		(await SubscribeAsync(sharedEndpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+		GetSubscriptionsForUser(userC).Should().BeEmpty();
+		GetSubscriptionsForUser(userD).Should().ContainSingle().Which.Endpoint.Should().Be(sharedEndpoint);
+		GetSubscriptions(ownEndpoint).Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task Subscribe_SameUserTwoEndpoints_ReplacesPreviousSubscription()
+	{
+		// Una sola subscription per utente: l'ultimo device che si iscrive sostituisce il precedente
 		factory_.SeedUser("push-multi@five68.com", UserRole.Employee);
 		Guid userId = factory_.GetUserId("push-multi@five68.com");
 		string phone = NewEndpoint("multi-phone");
@@ -275,8 +366,10 @@ public class TestPushController
 		(await SubscribeAsync(phone, "Android")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 		(await SubscribeAsync(desktop, "Chrome/Windows")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-		GetSubscriptions(phone).Should().ContainSingle().Which.Should().Match<PushSubscription>(x => x.UserId == userId && x.Active);
-		GetSubscriptions(desktop).Should().ContainSingle().Which.Should().Match<PushSubscription>(x => x.UserId == userId && x.Active);
+		GetSubscriptions(phone).Should().BeEmpty();
+		PushSubscription stored = GetSubscriptionsForUser(userId).Should().ContainSingle().Which;
+		stored.Endpoint.Should().Be(desktop);
+		stored.UserAgent.Should().Be("Chrome/Windows");
 	}
 
 	[Fact]
@@ -296,26 +389,51 @@ public class TestPushController
 	}
 
 	[Fact]
-	public async Task Subscribe_AfterUnsubscribe_ReactivatesSameRow()
+	public async Task Subscribe_AfterUnsubscribe_RecreatesSingleRow()
 	{
 		factory_.SeedUser("push-reactivate@five68.com", UserRole.Employee);
 		Guid userId = factory_.GetUserId("push-reactivate@five68.com");
 		string endpoint = NewEndpoint("reactivate");
-		SeedSubscription(userId, endpoint, active: false);
 
 		await client_.AuthorizeAsAsync(factory_, "push-reactivate@five68.com");
+		(await SubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+		(await UnsubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 		HttpResponseMessage response = await SubscribeAsync(endpoint);
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-		List<PushSubscription> stored = GetSubscriptions(endpoint);
-		stored.Should().HaveCount(1);
-		stored[0].Active.Should().BeTrue();
+		GetSubscriptionsForUser(userId).Should().ContainSingle().Which.Endpoint.Should().Be(endpoint);
+	}
+
+	[Fact]
+	public async Task SubscribeUnsubscribe_RepeatedWithDifferentEndpoints_NeverMoreThanOneRow()
+	{
+		// Simula il toggle ripetuto dalle impostazioni, anche cambiando browser: le iterazioni
+		// pari si disiscrivono, quelle dispari lasciano la riga che la successiva deve sostituire
+		factory_.SeedUser("push-loop@five68.com", UserRole.Employee);
+		Guid userId = factory_.GetUserId("push-loop@five68.com");
+
+		await client_.AuthorizeAsAsync(factory_, "push-loop@five68.com");
+		for (int i = 0; i < 6; i++)
+		{
+			string endpoint = NewEndpoint($"loop-{i}");
+
+			(await SubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+			GetSubscriptionsForUser(userId).Should().ContainSingle().Which.Endpoint.Should().Be(endpoint);
+
+			if (i % 2 == 0)
+			{
+				(await UnsubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+				GetSubscriptionsForUser(userId).Should().BeEmpty();
+			}
+		}
+
+		GetSubscriptionsForUser(userId).Should().ContainSingle().Which.Endpoint.Should().Be(NewEndpoint("loop-5"));
 	}
 
 	// --- POST /Push/unsubscribe ---
 
 	[Fact]
-	public async Task Unsubscribe_OwnSubscription_Returns204AndDeactivates()
+	public async Task Unsubscribe_OwnSubscription_Returns204AndDeletesRow()
 	{
 		factory_.SeedUser("push-unsub-1@five68.com", UserRole.Employee);
 		Guid userId = factory_.GetUserId("push-unsub-1@five68.com");
@@ -326,7 +444,7 @@ public class TestPushController
 		HttpResponseMessage response = await UnsubscribeAsync(endpoint);
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-		GetSubscriptions(endpoint).Single().Active.Should().BeFalse();
+		GetSubscriptions(endpoint).Should().BeEmpty();
 	}
 
 	[Fact]
@@ -342,7 +460,7 @@ public class TestPushController
 		HttpResponseMessage second = await UnsubscribeAsync(endpoint);
 
 		second.StatusCode.Should().Be(HttpStatusCode.NoContent);
-		GetSubscriptions(endpoint).Single().Active.Should().BeFalse();
+		GetSubscriptions(endpoint).Should().BeEmpty();
 	}
 
 	[Fact]
@@ -357,7 +475,7 @@ public class TestPushController
 	}
 
 	[Fact]
-	public async Task Unsubscribe_OtherUsersEndpoint_LeavesItActive()
+	public async Task Unsubscribe_OtherUsersEndpoint_LeavesItIntact()
 	{
 		factory_.SeedUser("push-unsub-owner@five68.com", UserRole.Employee);
 		factory_.SeedUser("push-unsub-intruder@five68.com", UserRole.Employee);
@@ -369,24 +487,24 @@ public class TestPushController
 		HttpResponseMessage response = await UnsubscribeAsync(ownerEndpoint);
 
 		response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-		GetSubscriptions(ownerEndpoint).Single().Active.Should().BeTrue("un utente non può disattivare la subscription di un altro");
+		GetSubscriptions(ownerEndpoint).Should().ContainSingle("un utente non può cancellare la subscription di un altro")
+			.Which.UserId.Should().Be(ownerId);
 	}
 
 	[Fact]
-	public async Task Unsubscribe_OnlyDeactivatesTheGivenEndpoint()
+	public async Task Unsubscribe_EndpointNoLongerRegistered_LeavesCurrentSubscription()
 	{
+		// Il vecchio device (sostituito da un'iscrizione più recente) si disiscrive col suo
+		// endpoint: non deve cancellare la subscription del device attuale dello stesso utente
 		factory_.SeedUser("push-unsub-5@five68.com", UserRole.Employee);
 		Guid userId = factory_.GetUserId("push-unsub-5@five68.com");
-		string phone = NewEndpoint("unsub-5-phone");
-		string desktop = NewEndpoint("unsub-5-desktop");
-		SeedSubscription(userId, phone);
-		SeedSubscription(userId, desktop);
+		string current = NewEndpoint("unsub-5-current");
+		SeedSubscription(userId, current);
 
 		await client_.AuthorizeAsAsync(factory_, "push-unsub-5@five68.com");
-		(await UnsubscribeAsync(phone)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+		(await UnsubscribeAsync(NewEndpoint("unsub-5-old"))).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-		GetSubscriptions(phone).Single().Active.Should().BeFalse();
-		GetSubscriptions(desktop).Single().Active.Should().BeTrue("l'altro dispositivo dello stesso utente resta iscritto");
+		GetSubscriptionsForUser(userId).Should().ContainSingle().Which.Endpoint.Should().Be(current);
 	}
 
 	[Fact]
@@ -401,28 +519,33 @@ public class TestPushController
 	// --- GET /Push/status ---
 
 	[Fact]
-	public async Task Status_NoSubscription_ReturnsFalse()
+	public async Task Status_NoSubscription_ReturnsInactiveWithNullEndpoint()
 	{
 		factory_.SeedUser("push-status-1@five68.com", UserRole.Employee);
 
 		await client_.AuthorizeAsAsync(factory_, "push-status-1@five68.com");
 
-		(await GetStatusAsync()).Should().BeFalse();
+		(bool active, string? endpoint) = await GetStatusAsync();
+		active.Should().BeFalse();
+		endpoint.Should().BeNull();
 	}
 
 	[Fact]
-	public async Task Status_AfterSubscribe_ReturnsTrue()
+	public async Task Status_AfterSubscribe_ReturnsActiveWithEndpoint()
 	{
 		factory_.SeedUser("push-status-2@five68.com", UserRole.Employee);
+		string endpoint = NewEndpoint("status-2");
 
 		await client_.AuthorizeAsAsync(factory_, "push-status-2@five68.com");
-		(await SubscribeAsync(NewEndpoint("status-2"))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+		(await SubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-		(await GetStatusAsync()).Should().BeTrue();
+		(bool active, string? returned) = await GetStatusAsync();
+		active.Should().BeTrue();
+		returned.Should().Be(endpoint);
 	}
 
 	[Fact]
-	public async Task Status_AfterUnsubscribe_ReturnsFalse()
+	public async Task Status_AfterUnsubscribe_ReturnsInactiveWithNullEndpoint()
 	{
 		factory_.SeedUser("push-status-3@five68.com", UserRole.Employee);
 		Guid userId = factory_.GetUserId("push-status-3@five68.com");
@@ -430,24 +553,31 @@ public class TestPushController
 		SeedSubscription(userId, endpoint);
 
 		await client_.AuthorizeAsAsync(factory_, "push-status-3@five68.com");
-		(await GetStatusAsync()).Should().BeTrue();
+		(await GetStatusAsync()).Active.Should().BeTrue();
 
 		(await UnsubscribeAsync(endpoint)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-		(await GetStatusAsync()).Should().BeFalse();
+		(bool active, string? returned) = await GetStatusAsync();
+		active.Should().BeFalse();
+		returned.Should().BeNull();
 	}
 
 	[Fact]
-	public async Task Status_OnlyOtherDeviceStillActive_ReturnsTrue()
+	public async Task Status_SubscribedFromAnotherDevice_ReturnsLatestEndpoint()
 	{
+		// Il client confronta l'endpoint restituito con quello del proprio browser per distinguere
+		// "attive su questo dispositivo" da "attive su un altro dispositivo"
 		factory_.SeedUser("push-status-4@five68.com", UserRole.Employee);
-		Guid userId = factory_.GetUserId("push-status-4@five68.com");
-		SeedSubscription(userId, NewEndpoint("status-4-off"), active: false);
-		SeedSubscription(userId, NewEndpoint("status-4-on"));
+		string phone = NewEndpoint("status-4-phone");
+		string desktop = NewEndpoint("status-4-desktop");
 
 		await client_.AuthorizeAsAsync(factory_, "push-status-4@five68.com");
+		(await SubscribeAsync(phone)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+		(await SubscribeAsync(desktop)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-		(await GetStatusAsync()).Should().BeTrue();
+		(bool active, string? endpoint) = await GetStatusAsync();
+		active.Should().BeTrue();
+		endpoint.Should().Be(desktop);
 	}
 
 	[Fact]
@@ -469,7 +599,29 @@ public class TestPushController
 
 		await client_.AuthorizeAsAsync(factory_, "push-status-5-b@five68.com");
 
-		(await GetStatusAsync()).Should().BeFalse();
+		(bool active, string? endpoint) = await GetStatusAsync();
+		active.Should().BeFalse();
+		endpoint.Should().BeNull();
+	}
+
+	// --- DELETE /user/{id}: disabilitazione ---
+
+	[Fact]
+	public async Task DisableUser_WithSubscription_DeletesItsSubscriptions()
+	{
+		factory_.SeedUser("push-disable-1@five68.com", UserRole.Employee);
+		factory_.SeedUser("push-disable-1-other@five68.com", UserRole.Employee);
+		Guid userId = factory_.GetUserId("push-disable-1@five68.com");
+		Guid otherId = factory_.GetUserId("push-disable-1-other@five68.com");
+		string otherEndpoint = NewEndpoint("disable-1-other");
+		SeedSubscription(userId, NewEndpoint("disable-1"));
+		SeedSubscription(otherId, otherEndpoint);
+
+		await DisableUserAsync(userId);
+
+		GetSubscriptionsForUser(userId).Should().BeEmpty("un utente disabilitato non deve più ricevere notifiche");
+		GetSubscriptionsForUser(otherId).Should().ContainSingle("le subscription degli altri utenti non vanno toccate")
+			.Which.Endpoint.Should().Be(otherEndpoint);
 	}
 
 	// --- GET /Push/vapid-public-key ---
@@ -586,30 +738,37 @@ public class TestPushController
 	}
 
 	[Fact]
-	public async Task CreateSwapRequest_InactiveSubscription_IsNotEnqueued()
+	public async Task CreateSwapRequest_PayloadIsCamelCase()
 	{
+		// Il service worker del frontend legge il payload con chiavi camelCase: con le chiavi
+		// PascalCase di default di System.Text.Json la notifica arriverebbe vuota
 		ClearSubscriptions();
 		Guid managerId = factory_.GetUserId(ManagerEmail);
-		Guid requesterId = factory_.CreateEmployee("push-inactive-req@five68.com");
-		Guid targetId = factory_.CreateEmployee("push-inactive-tgt@five68.com");
-		Guid shiftId = factory_.SeedShift(requesterId, new DateOnly(2031, 9, 2), new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
-
-		string activeEndpoint = NewEndpoint("inactive-target-on");
-		SeedSubscription(targetId, NewEndpoint("inactive-target-off"), active: false);
-		SeedSubscription(targetId, activeEndpoint);
+		Guid requesterId = factory_.CreateEmployee("push-payload-req@five68.com");
+		Guid targetId = factory_.CreateEmployee("push-payload-tgt@five68.com");
+		DateOnly shiftDate = new(2031, 9, 7);
+		Guid shiftId = factory_.SeedShift(requesterId, shiftDate, new TimeOnly(9, 0), TimeSpan.FromHours(8), managerId);
+		string targetEndpoint = NewEndpoint("payload-target");
+		SeedSubscription(targetId, targetEndpoint);
 
 		await DrainQueueAsync();
 
-		await client_.AuthorizeAsAsync(factory_, "push-inactive-req@five68.com");
+		await client_.AuthorizeAsAsync(factory_, "push-payload-req@five68.com");
 		HttpResponseMessage response = await client_.PostAsJsonAsync("/SwapRequest", new SwapRequestCreate
 		{
 			ShiftId = shiftId,
 			TargetEmployeeIds = [targetId],
 		});
 		response.StatusCode.Should().Be(HttpStatusCode.Created);
+		List<SwapRequestDTO>? requests = await response.Content.ReadFromJsonAsync<List<SwapRequestDTO>>();
 
-		List<PushJob> jobs = await DrainQueueAsync();
-		jobs.Select(x => x.Endpoint).Should().BeEquivalentTo([activeEndpoint]);
+		PushJob job = (await DrainQueueAsync()).Should().ContainSingle(x => x.Endpoint == targetEndpoint).Which;
+		using JsonDocument payload = JsonDocument.Parse(job.PayloadJson);
+		payload.RootElement.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(
+			["title", "body", "type", "swapRequestId", "shiftDate"]);
+		payload.RootElement.GetProperty("type").GetString().Should().Be("swap_request_created");
+		payload.RootElement.GetProperty("swapRequestId").GetGuid().Should().Be(requests![0].Id);
+		payload.RootElement.GetProperty("shiftDate").GetString().Should().Be("2031-09-07");
 	}
 
 	[Fact]

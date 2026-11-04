@@ -437,6 +437,26 @@ export interface SwapRequestCreatePayload {
 	targetEmployeeIds: string[];
 }
 
+/** Mirror della PushSubscriptionCreate del backend C#. */
+export interface PushSubscriptionPayload {
+	endpoint: string;
+	p256dh: string;
+	auth: string;
+	userAgent?: string;
+}
+
+export const pushApi = {
+	/** 404 se WebPush non è configurato/abilitato sul server. */
+	vapidPublicKey: () => api.get<{ publicKey: string }>('/push/vapid-public-key'),
+
+	subscribe: (body: PushSubscriptionPayload) => api.post<void>('/push/subscribe', body),
+
+	unsubscribe: (endpoint: string) => api.post<void>('/push/unsubscribe', { endpoint }),
+
+	/** endpoint è quello della subscription registrata per l'utente (null se nessuna) — va confrontato con quello del browser corrente per sapere se è attiva su QUESTO dispositivo o su un altro. */
+	status: () => api.get<{ active: boolean; endpoint: string | null }>('/push/status'),
+};
+
 export const swapRequestApi = {
 	getPending: () => api.get<SwapRequestDTO[]>('/swaprequest/pending'),
 

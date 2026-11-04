@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AppUser } from '@/types';
 import { authApi, userApi, UserStatus, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
+import { resetPushCache, syncPushSubscriptionOnLogin, unsubscribeBackendOnLogout } from '@/lib/pushSubscription';
 
 interface AuthContextValue {
 	user: AppUser | null
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				const dto = await userApi.getById(userId);
 				if (mounted) {
 					setUser(mapUserDTO(dto));
-					window.dispatchEvent(new Event('app:login'));
+					syncPushSubscriptionOnLogin(dto.id);
 				}
 			} catch {
 				clearTokens();
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		// apiClient dispatches 'app:logout' when the refresh token also expires
 		const handleExternalLogout = () => {
+			resetPushCache();
 			if (mounted) setUser(null);
 		};
 		window.addEventListener('app:logout', handleExternalLogout);
@@ -102,11 +104,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		const dto = await userApi.getById(userId);
 		const appUser = mapUserDTO(dto);
 		setUser(appUser);
-		window.dispatchEvent(new Event('app:login'));
+		syncPushSubscriptionOnLogin(appUser.id);
 		return appUser;
 	};
 
 	const logout = async () => {
+		// Qui e non in un listener su app:logout perché quell'evento scatta anche
+		// sui logout forzati (token scaduto, sessione sostituita da un login
+		// altrove), dove la subscription sopravvive (review Hermann su PR #74).
+		await unsubscribeBackendOnLogout();
+
 		window.dispatchEvent(new Event('app:logout'));
 		try {
 			await authApi.logout();

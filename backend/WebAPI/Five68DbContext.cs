@@ -112,7 +112,7 @@ namespace Five68
 				e.HasKey(x => x.Id);
 				e.Property(x => x.Id).ValueGeneratedNever();
 				e.HasIndex(x => x.Endpoint).IsUnique();
-				e.HasIndex(x => x.UserId);
+				e.HasIndex(x => x.UserId).IsUnique();
 
 				e.HasOne<User>()
 					.WithMany()

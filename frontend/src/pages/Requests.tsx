@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRequests } from '@/context/RequestsContext';
 import { useEmployees } from '@/hooks/useEmployees';
-import { usePushNotifications, isWebPushConfigured } from '@/hooks/usePushNotifications';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { showErrorToast } from '@/lib/toast';
 import type { SwapRequest } from '@/types';
@@ -132,7 +132,7 @@ export default function Requests() {
 
 					{push.availability === 'vapid-missing' && (
 						<p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-							Configura `VITE_VAPID_PUBLIC_KEY` per attivare le notifiche push.
+							Le notifiche push non sono configurate su questo server.
 						</p>
 					)}
 
@@ -165,7 +165,7 @@ export default function Requests() {
 					)}
 
 					<p className="text-xs text-slate-500">
-						Stato browser: {push.permission}. {isWebPushConfigured ? 'VAPID configurato.' : 'VAPID non configurato.'}
+						Stato browser: {push.permission}.
 					</p>
 				</div>
 			</div>

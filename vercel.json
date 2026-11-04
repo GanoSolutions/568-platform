@@ -58,15 +58,6 @@
       ]
     },
     {
-      "source": "/push-sw.js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate"
-        }
-      ]
-    },
-    {
       "source": "/push-sw-v2.js",
       "headers": [
         {

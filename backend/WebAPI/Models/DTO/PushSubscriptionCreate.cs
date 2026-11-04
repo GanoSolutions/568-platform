@@ -11,9 +11,11 @@ namespace Five68.Models.DTO
 		public string Endpoint { get; set; } = string.Empty;
 		[Required]
 		[MaxLength(256)]
+		[PushKey(65, FirstByte = 0x04)]
 		public string P256dh { get; set; } = string.Empty;
 		[Required]
 		[MaxLength(256)]
+		[PushKey(16)]
 		public string Auth { get; set; } = string.Empty;
 		[MaxLength(512)]
 		public string? UserAgent { get; set; }

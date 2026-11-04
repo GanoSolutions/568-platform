@@ -8,6 +8,7 @@ namespace Five68.Services
 {
 	public class PushDispatcherBackgroundService : BackgroundService
 	{
+		private static readonly int TimeToLiveSeconds = (int)TimeSpan.FromHours(24).TotalSeconds;
 		private readonly PushDispatchQueue _queue;
 		private readonly IServiceScopeFactory _scopeFactory;
 		private readonly WebPushSettings _settings;
@@ -45,7 +46,11 @@ namespace Five68.Services
 			try
 			{
 				PushSubscription subscription = new(job.Endpoint, job.P256dh, job.Auth);
-				await _client.SendNotificationAsync(subscription, job.PayloadJson, vapid);
+				await _client.SendNotificationAsync(subscription, job.PayloadJson, new Dictionary<string, object>
+				{
+					["vapidDetails"] = vapid,
+					["TTL"] = TimeToLiveSeconds
+				});
 			}
 			catch (WebPushException ex) when (ex.StatusCode == HttpStatusCode.NotFound || ex.StatusCode == HttpStatusCode.Gone)
 			{
@@ -56,7 +61,7 @@ namespace Five68.Services
 					// si disattiva, così non la si ritenta all'infinito
 					using IServiceScope scope = _scopeFactory.CreateScope();
 					PushSubscriptionFacade facade = scope.ServiceProvider.GetRequiredService<PushSubscriptionFacade>();
-					await facade.DeactivateByEndpointAsync(job.Endpoint);
+					await facade.DeleteByEndpointAsync(job.Endpoint);
 					_logger.LogInformation("Subscription {SubscriptionId} disattivata: endpoint non più valido", job.SubscriptionId);
 				}
 				catch (Exception dbEx)
