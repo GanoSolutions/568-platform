@@ -1,10 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AppUser } from '@/types';
-import { authApi, pushApi, userApi, UserStatus, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
-
-// Deve combaciare con pushServiceWorkerPath in usePushNotifications.ts — non
-// importato da lì per evitare un ciclo (quell'hook usa useAuth da qui).
-const PUSH_SERVICE_WORKER_PATH = '/push-sw-v2.js';
+import { authApi, userApi, UserStatus, type UserDTO, getAccessToken, setTokens, clearTokens, getUserIdFromToken } from '@/lib/apiClient';
+import { resetPushCache, syncPushSubscriptionOnLogin, unsubscribeBackendOnLogout } from '@/lib/pushSubscription';
 
 interface AuthContextValue {
 	user: AppUser | null
@@ -71,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				const dto = await userApi.getById(userId);
 				if (mounted) {
 					setUser(mapUserDTO(dto));
-					window.dispatchEvent(new Event('app:login'));
+					syncPushSubscriptionOnLogin(dto.id);
 				}
 			} catch {
 				clearTokens();
@@ -84,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		// apiClient dispatches 'app:logout' when the refresh token also expires
 		const handleExternalLogout = () => {
+			resetPushCache();
 			if (mounted) setUser(null);
 		};
 		window.addEventListener('app:logout', handleExternalLogout);
@@ -106,31 +104,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		const dto = await userApi.getById(userId);
 		const appUser = mapUserDTO(dto);
 		setUser(appUser);
-		window.dispatchEvent(new Event('app:login'));
+		syncPushSubscriptionOnLogin(appUser.id);
 		return appUser;
 	};
 
 	const logout = async () => {
-		// Disiscrive la subscription push di questo browser PRIMA di cancellare i
-		// token (/push/unsubscribe richiede autenticazione) — non tocca la
-		// subscription lato browser (resta registrata), così il prossimo login la
-		// ri-registra sul backend senza richiedere di nuovo il permesso. Vive qui
-		// e non in un listener su app:logout generico perché quell'evento scatta
-		// anche sui logout forzati (token scaduto, sessione sostituita da un
-		// login altrove) — casi in cui la subscription non va toccata, dato che
-		// nel nuovo modello sopravvive ai cambi di sessione (richiesto da
-		// Hermann in review su PR #74).
-		try {
-			if ('serviceWorker' in navigator) {
-				const registration = await navigator.serviceWorker.getRegistration(PUSH_SERVICE_WORKER_PATH);
-				const subscription = await registration?.pushManager.getSubscription();
-				if (subscription) {
-					await pushApi.unsubscribe(subscription.endpoint);
-				}
-			}
-		} catch {
-			// best-effort: non blocchiamo il logout per un errore sulla unsubscribe
-		}
+		// Qui e non in un listener su app:logout perché quell'evento scatta anche
+		// sui logout forzati (token scaduto, sessione sostituita da un login
+		// altrove), dove la subscription sopravvive (review Hermann su PR #74).
+		await unsubscribeBackendOnLogout();
 
 		window.dispatchEvent(new Event('app:logout'));
 		try {

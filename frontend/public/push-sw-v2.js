@@ -1,4 +1,4 @@
-// v5 - payload camelCase dal backend C# (issue #83), origin dinamico, dedup per richiesta
+// v6 - icona quadrata, avviso anche quando una notifica ne sostituisce un'altra
 self.addEventListener('install', () => {
   self.skipWaiting()
 })
@@ -26,11 +26,13 @@ self.addEventListener('push', (event) => {
   const origin = self.location.origin
   const options = {
     body: payload.body || 'Hai una nuova notifica',
-    icon: origin + '/logo.png',
+    icon: origin + '/logo-192.png',
     badge: origin + '/logo-badge.png',
     // Stesso tag = stessa richiesta: notifiche successive sulla stessa richiesta
-    // si sostituiscono invece di accumularsi.
+    // si sostituiscono invece di accumularsi. Senza renotify la sostituzione
+    // sarebbe silenziosa; il browser rifiuta renotify se il tag manca.
     tag: payload.swapRequestId,
+    renotify: Boolean(payload.swapRequestId),
     data: {
       url: payload.url || urlForType(payload.type),
     },
