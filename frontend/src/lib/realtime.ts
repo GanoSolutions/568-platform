@@ -9,7 +9,7 @@ let connection: signalR.HubConnection | null = null;
 // differenza di un flag derivato da stato React (es. `user`), questo è già vero
 // nell'istante esatto in cui la connessione si chiude, indipendentemente da quando
 // React arriva a ri-renderizzare. Serve a chi ascolta onclose/onreconnecting per
-// distinguere una chiusura voluta (logout) da una caduta di rete vera.
+// distinguere una chiusura voluta (logout, chiusura pagina) da una caduta di rete vera.
 let intentionalStop = false;
 
 export function wasConnectionStoppedIntentionally(): boolean {
@@ -42,6 +42,13 @@ export function getAppHubConnection(): signalR.HubConnection {
 			.withAutomaticReconnect()
 			.configureLogging(signalR.LogLevel.Warning)
 			.build();
+
+		// Al reload Firefox chiude il WebSocket mentre la pagina è ancora attiva: senza
+		// questo flag la pagina che sta per chiudersi mostrerebbe il toast "non
+		// disponibili" (issue #82).
+		window.addEventListener('beforeunload', () => {
+			intentionalStop = true;
+		});
 
 		window.addEventListener('app:logout', () => {
 			intentionalStop = true;
